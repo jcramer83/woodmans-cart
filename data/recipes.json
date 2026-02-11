@@ -1,0 +1,471 @@
+[
+  {
+    "id": "mle02ag8t9vfu",
+    "name": "Beef Mac and Cheese",
+    "enabled": false,
+    "items": [
+      {
+        "item": "Food Club Olive Oil Extra Virgin 16 9 Fl Oz",
+        "quantity": 1,
+        "note": "",
+        "productName": "Food Club Olive Oil Extra Virgin 16 9 Fl Oz"
+      },
+      {
+        "item": "Food Club Beef Broth 32 Oz",
+        "quantity": 1,
+        "note": "",
+        "productName": "Food Club Beef Broth 32 Oz"
+      }
+    ]
+  },
+  {
+    "id": "mlf01steaktaco",
+    "name": "Steak Tacos (Gluten Free)",
+    "enabled": true,
+    "items": [
+      {
+        "item": "flank steak",
+        "quantity": 1,
+        "note": "1.5 lbs",
+        "productName": ""
+      },
+      {
+        "item": "corn tortillas",
+        "quantity": 1,
+        "note": "gluten free",
+        "productName": ""
+      },
+      {
+        "item": "lime",
+        "quantity": 3,
+        "note": "for juice and wedges",
+        "productName": ""
+      },
+      {
+        "item": "avocado",
+        "quantity": 2,
+        "note": "for guacamole",
+        "productName": ""
+      },
+      {
+        "item": "white onion",
+        "quantity": 1,
+        "note": "diced for topping",
+        "productName": ""
+      },
+      {
+        "item": "fresh cilantro",
+        "quantity": 1,
+        "note": "1 bunch",
+        "productName": ""
+      },
+      {
+        "item": "jalapeno pepper",
+        "quantity": 2,
+        "note": "sliced",
+        "productName": ""
+      },
+      {
+        "item": "roma tomatoes",
+        "quantity": 3,
+        "note": "for pico de gallo",
+        "productName": ""
+      },
+      {
+        "item": "garlic",
+        "quantity": 1,
+        "note": "1 head",
+        "productName": ""
+      },
+      {
+        "item": "sour cream",
+        "quantity": 1,
+        "note": "check GF label",
+        "productName": ""
+      },
+      {
+        "item": "taco seasoning",
+        "quantity": 1,
+        "note": "gluten free",
+        "productName": ""
+      },
+      {
+        "item": "cotija cheese",
+        "quantity": 1,
+        "note": "for crumbling on top",
+        "productName": ""
+      }
+    ]
+  },
+  {
+    "id": "mlefarkc96d8r",
+    "name": "Gluten Free Beef Tacos",
+    "enabled": true,
+    "items": [
+      {
+        "item": "ground beef",
+        "quantity": 1,
+        "note": "1.5 lbs, 80/20 lean",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "corn tortillas",
+        "quantity": 1,
+        "note": "8-10 count package, certified gluten free",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "romaine lettuce",
+        "quantity": 1,
+        "note": "1 head",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "tomatoes",
+        "quantity": 2,
+        "note": "medium sized",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "cheddar cheese",
+        "quantity": 1,
+        "note": "8 oz shredded",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "sour cream",
+        "quantity": 1,
+        "note": "8 oz container",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "yellow onion",
+        "quantity": 1,
+        "note": "medium",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "garlic",
+        "quantity": 1,
+        "note": "1 bulb, need 2-3 cloves",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "lime",
+        "quantity": 2,
+        "note": "fresh",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "cumin",
+        "quantity": 1,
+        "note": "ground, check gluten free label",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "chili powder",
+        "quantity": 1,
+        "note": "check gluten free label",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "paprika",
+        "quantity": 1,
+        "note": "check gluten free label",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "salt",
+        "quantity": 1,
+        "note": "to taste",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "black pepper",
+        "quantity": 1,
+        "note": "to taste",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "olive oil",
+        "quantity": 1,
+        "note": "for cooking",
+        "productName": "",
+        "price": ""
+      }
+    ]
+  },
+  {
+    "id": "mlehbfo1imin0",
+    "name": "Spaghetti with Meatballs",
+    "enabled": true,
+    "items": [
+      {
+        "item": "gluten free spaghetti pasta",
+        "quantity": 1,
+        "note": "1 lb box",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "ground beef",
+        "quantity": 1,
+        "note": "1 lb, 85/15 lean",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "gluten free breadcrumbs",
+        "quantity": 1,
+        "note": "need 1/2 cup",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "yellow onion",
+        "quantity": 1,
+        "note": "1 medium, diced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "garlic cloves",
+        "quantity": 1,
+        "note": "need 4 cloves, minced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "crushed tomatoes",
+        "quantity": 2,
+        "note": "28 oz cans",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "tomato paste",
+        "quantity": 1,
+        "note": "6 oz can",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "fresh basil",
+        "quantity": 1,
+        "note": "1 bunch",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "dried oregano",
+        "quantity": 1,
+        "note": "need 1 tsp",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "egg",
+        "quantity": 1,
+        "note": "need 1 large for meatballs",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "fresh parsley",
+        "quantity": 1,
+        "note": "1 bunch, for garnish",
+        "productName": "",
+        "price": ""
+      }
+    ]
+  },
+  {
+    "id": "mlem3qc0ad96t",
+    "name": "Gluten Free Beef Tacos",
+    "enabled": false,
+    "items": [
+      {
+        "item": "organic ground beef",
+        "quantity": 1,
+        "note": "1 lb",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "gluten free corn tortillas",
+        "quantity": 1,
+        "note": "8-12 count package",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic romaine lettuce",
+        "quantity": 1,
+        "note": "1 head, shredded",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic tomatoes",
+        "quantity": 2,
+        "note": "diced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "dairy free shredded cheese",
+        "quantity": 1,
+        "note": "8 oz bag",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic yellow onion",
+        "quantity": 1,
+        "note": "1 medium, diced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic garlic",
+        "quantity": 1,
+        "note": "2 cloves, minced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic ground cumin",
+        "quantity": 1,
+        "note": "1 tbsp",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic chili powder",
+        "quantity": 1,
+        "note": "1 tbsp",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic paprika",
+        "quantity": 1,
+        "note": "1 tsp",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "dairy free sour cream",
+        "quantity": 1,
+        "note": "optional topping",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic cilantro",
+        "quantity": 1,
+        "note": "1 bunch, for garnish",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic lime",
+        "quantity": 2,
+        "note": "for juice and serving",
+        "productName": "",
+        "price": ""
+      }
+    ]
+  },
+  {
+    "id": "mlfdvt0br0sb0",
+    "name": "Breakfast Scramble",
+    "enabled": false,
+    "items": [
+      {
+        "item": "organic large eggs",
+        "quantity": 1,
+        "note": "need 8 eggs",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic red bell pepper",
+        "quantity": 1,
+        "note": "1 medium, diced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic baby spinach",
+        "quantity": 1,
+        "note": "need 2 cups",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic mushrooms",
+        "quantity": 1,
+        "note": "8 oz, sliced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic yellow onion",
+        "quantity": 1,
+        "note": "1 small, diced",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "organic cherry tomatoes",
+        "quantity": 1,
+        "note": "1 cup, halved",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "dairy free shredded cheese cheddar style",
+        "quantity": 1,
+        "note": "1 cup",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "fresh chives",
+        "quantity": 1,
+        "note": "for garnish",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "garlic powder",
+        "quantity": 1,
+        "note": "1 tsp",
+        "productName": "",
+        "price": ""
+      },
+      {
+        "item": "smoked paprika",
+        "quantity": 1,
+        "note": "1/2 tsp",
+        "productName": "",
+        "price": ""
+      }
+    ]
+  }
+]
