@@ -4,7 +4,7 @@
 
 # Woodman's Cart
 
-Automate your grocery shopping on [ShopWoodmans.com](https://www.shopwoodmans.com). Manage weekly staples, build recipes, generate meal ideas with AI, and add everything to your online cart with one click.
+Automate your grocery shopping on [Woodmans-Food.com](https://www.woodmans-food.com). Manage weekly staples, build recipes, generate meal ideas with AI, and add everything to your online cart with one click.
 
 Runs as an **Electron desktop app** or a **standalone web server** (for Docker/Unraid).
 
@@ -14,7 +14,7 @@ Runs as an **Electron desktop app** or a **standalone web server** (for Docker/U
 - **Recipe Management** &mdash; Create recipes with ingredients, enable/disable them per week
 - **AI Recipe Generation** &mdash; Generate recipes with Claude AI based on a prompt, dietary needs, or what's in your pantry
 - **Product Search** &mdash; Search the Woodman's catalog and link exact products to your items
-- **One-Click Cart** &mdash; Adds all enabled items to your ShopWoodmans.com cart automatically
+- **One-Click Cart** &mdash; Adds all enabled items to your Woodmans-Food.com cart automatically
 - **Two Automation Modes**
   - *Standard* &mdash; Full Playwright browser automation (~3-5s per item)
   - *Fast* &mdash; Direct GraphQL API calls (~10x faster)
@@ -49,8 +49,8 @@ Then open `http://localhost:3456` in your browser.
 
 | Variable | Description |
 |----------|-------------|
-| `WOODMANS_USERNAME` | ShopWoodmans.com login email |
-| `WOODMANS_PASSWORD` | ShopWoodmans.com password |
+| `WOODMANS_USERNAME` | Woodmans-Food.com login email |
+| `WOODMANS_PASSWORD` | Woodmans-Food.com password |
 | `ANTHROPIC_API_KEY` | Claude API key (optional, for AI recipe generation) |
 
 ## How It Works
@@ -58,7 +58,7 @@ Then open `http://localhost:3456` in your browser.
 1. **Configure** your Woodman's credentials in Settings
 2. **Add staples** &mdash; your recurring weekly items
 3. **Create or generate recipes** &mdash; toggle them on/off each week
-4. **Hit "Add to Cart"** &mdash; the app logs into ShopWoodmans.com and adds everything automatically
+4. **Hit "Add to Cart"** &mdash; the app logs into Woodmans-Food.com and adds everything automatically
 
 In **Standard mode**, Playwright drives a real browser through the checkout flow. In **Fast mode**, it logs in once to grab session cookies, then fires GraphQL API calls directly &mdash; much faster but dependent on Instacart's API stability.
 
@@ -74,7 +74,7 @@ Docker (server-standalone.js) ─┘
                    (Playwright browser)    (GraphQL API)
                          └──────────┬──────────┘
                                     │
-                            ShopWoodmans.com
+                            Woodmans-Food.com
 ```
 
 The renderer is a vanilla HTML/CSS/JS SPA with no build step. An [API adapter](renderer/api-adapter.js) transparently routes calls through Electron IPC or REST+WebSocket depending on the environment.
