@@ -55,7 +55,6 @@ function startServer(deps) {
     const safe = Object.assign({}, settings);
     delete safe.password;
     delete safe.anthropicApiKey;
-    delete safe.openaiApiKey;
     res.json(safe);
   });
 
@@ -68,9 +67,6 @@ function startServer(deps) {
     }
     if (!incoming.anthropicApiKey && current.anthropicApiKey) {
       incoming.anthropicApiKey = current.anthropicApiKey;
-    }
-    if (!incoming.openaiApiKey && current.openaiApiKey) {
-      incoming.openaiApiKey = current.openaiApiKey;
     }
     writeJSON(SETTINGS_PATH, incoming);
     res.json({ ok: true });
@@ -288,76 +284,93 @@ function startServer(deps) {
     }
   });
 
-  // Recipe image generation (OpenAI)
+  // Recipe image search (web) — search DuckDuckGo images, download & cache
   app.post("/api/recipe/image", async function (req, res) {
     const { recipeId, recipeName } = req.body;
     if (!recipeId || !recipeName) {
       return res.json({ error: "Missing recipeId or recipeName" });
     }
 
-    const currentSettings = readJSON(SETTINGS_PATH) || {};
-    const apiKey = currentSettings.openaiApiKey;
-    if (!apiKey) {
-      return res.json({ error: "No OpenAI API key configured" });
-    }
-
     const httpsModule = require("https");
+    const httpModule = require("http");
     const imgDir = path.join(__dirname, "data", "recipe-images");
     fs.mkdirSync(imgDir, { recursive: true });
 
-    const prompt = "A beautiful, appetizing food photograph of: " + recipeName + ". Professional food photography, well-lit, on a clean plate, top-down angle.";
+    // Helper: HTTP(S) GET returning a Buffer, follows redirects
+    var browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    function httpGet(url, maxRedirects) {
+      if (maxRedirects === undefined) maxRedirects = 5;
+      return new Promise(function (resolve, reject) {
+        if (maxRedirects <= 0) return reject(new Error("Too many redirects"));
+        var mod = url.startsWith("https") ? httpsModule : httpModule;
+        var headers = { "User-Agent": browserUA, "Accept": "image/*,*/*;q=0.8" };
+        var req = mod.get(url, { headers: headers, timeout: 15000 }, function (resp) {
+          if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+            var next = resp.headers.location;
+            if (next.startsWith("/")) {
+              var parsed = new URL(url);
+              next = parsed.protocol + "//" + parsed.host + next;
+            }
+            resolve(httpGet(next, maxRedirects - 1));
+            return;
+          }
+          if (resp.statusCode !== 200) {
+            resp.resume();
+            return reject(new Error("HTTP " + resp.statusCode));
+          }
+          var chunks = [];
+          resp.on("data", function (c) { chunks.push(c); });
+          resp.on("end", function () { resolve(Buffer.concat(chunks)); });
+          resp.on("error", reject);
+        });
+        req.on("error", reject);
+        req.on("timeout", function () { req.destroy(); reject(new Error("Timeout")); });
+      });
+    }
 
-    const body = JSON.stringify({
-      model: "gpt-image-1",
-      prompt: prompt,
-      n: 1,
-      size: "1024x1024",
-      quality: "low",
-    });
+    var query = recipeName + " recipe";
 
     try {
-      const result = await new Promise(function (resolve, reject) {
-        const reqObj = httpsModule.request(
-          {
-            hostname: "api.openai.com",
-            path: "/v1/images/generations",
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer " + apiKey,
-            },
-          },
-          function (apiRes) {
-            let data = "";
-            apiRes.on("data", function (chunk) { data += chunk; });
-            apiRes.on("end", function () {
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.error) {
-                  reject(new Error(parsed.error.message || "OpenAI API error"));
-                  return;
-                }
-                resolve(parsed);
-              } catch (e) {
-                reject(new Error("Failed to parse OpenAI response"));
-              }
-            });
-          }
-        );
-        reqObj.on("error", reject);
-        reqObj.write(body);
-        reqObj.end();
+      // Step 1: Search Bing Images for recipe photos
+      var bingUrl = "https://www.bing.com/images/search?q=" + encodeURIComponent(query) + "&form=HDRSC3&first=1";
+      var pageData = await httpGet(bingUrl);
+      var pageStr = pageData.toString("utf-8");
+
+      // Extract image URLs from Bing results (embedded as escaped JSON murl fields)
+      var urlMatches = pageStr.match(/murl&quot;:&quot;(https?:\/\/[^&]+?)&quot;/g) || [];
+      var imageUrls = urlMatches.map(function (m) {
+        return m.replace(/^murl&quot;:&quot;/, "").replace(/&quot;$/, "");
       });
 
-      const b64 = result.data && result.data[0] && result.data[0].b64_json;
-      if (!b64) {
-        return res.json({ error: "No image data in response" });
+      if (imageUrls.length === 0) {
+        return res.json({ error: "No images found" });
       }
 
-      const imgPath = path.join(imgDir, recipeId + ".png");
-      fs.writeFileSync(imgPath, Buffer.from(b64, "base64"));
+      // Step 2: Try downloading until one works
+      var imageData = null;
+      for (var i = 0; i < Math.min(imageUrls.length, 10); i++) {
+        try {
+          imageData = await httpGet(imageUrls[i]);
+          if (imageData && imageData.length > 5000) break;
+          imageData = null;
+        } catch (e) {
+          imageData = null;
+        }
+      }
 
-      const imageUrl = "/data/recipe-images/" + recipeId + ".png";
+      if (!imageData) {
+        return res.json({ error: "Could not download any image" });
+      }
+
+      // Detect extension from content (JPEG starts with FFD8, PNG with 8950)
+      var ext = "jpg";
+      if (imageData[0] === 0x89 && imageData[1] === 0x50) ext = "png";
+      else if (imageData[0] === 0x52 && imageData[1] === 0x49) ext = "webp";
+
+      var imgPath = path.join(imgDir, recipeId + "." + ext);
+      fs.writeFileSync(imgPath, imageData);
+
+      var imageUrl = "/data/recipe-images/" + recipeId + "." + ext;
       res.json({ ok: true, imageUrl: imageUrl });
     } catch (err) {
       res.json({ error: err.message });
