@@ -204,7 +204,7 @@ function startServer(deps) {
 
   // AI recipe generation
   app.post("/api/recipe/generate", async function (req, res) {
-    const { prompt, servings, glutenFree, dairyFree, preferOrganic } = req.body;
+    const { prompt, servings, glutenFree, dairyFree, preferOrganic, pickyEater } = req.body;
     const currentSettings = readJSON(SETTINGS_PATH) || {};
     const apiKey = currentSettings.anthropicApiKey;
 
@@ -223,6 +223,9 @@ function startServer(deps) {
     }
     if (preferOrganic) {
       dietaryRules += '\n- PREFER ORGANIC: Include "organic" in search terms when possible (e.g. "organic chicken breast", "organic baby spinach", "organic diced tomatoes"). This helps the store search show organic options first.';
+    }
+    if (pickyEater) {
+      dietaryRules += '\n- PICKY EATER FRIENDLY: Stick to familiar, crowd-pleasing ingredients. Avoid unusual spices, exotic vegetables, strong flavors (anchovies, blue cheese, liver, etc.), overly spicy food, or adventurous textures. Keep it simple and approachable — the kind of food even a selective eater would enjoy.';
     }
 
     const systemPrompt = 'You are a recipe assistant for a grocery shopping app. Generate a recipe with a list of ingredients that can be found at a grocery store called Woodman\'s. The "item" field is used as a SEARCH QUERY on the store\'s website to find and add products to a cart.\n\nReturn ONLY valid JSON in this exact format, no other text:\n{\n  "name": "Recipe Name",\n  "servings": 4,\n  "instructions": ["Step 1...", "Step 2..."],\n  "items": [\n    {"item": "search term for store website", "quantity": 1, "note": "size or detail"}\n  ]\n}\n\nRules:\n- "servings" is the number of servings the recipe makes\n- "instructions" is an array of step-by-step cooking instructions. Be concise but complete.\n- "item" is a SEARCH QUERY typed into the store\'s search bar. Use names a shopper would type to find the exact product, e.g. "boneless skinless chicken thighs" not "chicken" or "2 lbs chicken thighs"\n- Do NOT put amounts, measurements, or cooking units in the "item" field (no "2 cups flour", no "1 lb ground beef"). Put only the product name.\n- "quantity" is how many times to ADD this item to the cart. Each add gives you one store unit (1 can, 1 bag, 1 bunch, 1 individual fruit/vegetable, etc.). If the recipe needs 2 tomatoes, quantity is 2. If it needs 2 cans of diced tomatoes, quantity is 2. If it needs 2 cups of flour, quantity is still 1 because one bag of flour is enough. Think about what the shopper actually needs to put in their cart.\n- Use the "note" field for the recipe amount, size preference, or preparation details (e.g. "need 2 cups", "1 lb", "diced")\n- Be specific with product names (e.g. "sharp cheddar cheese block" not just "cheese")\n- Skip pantry staples most people already have (salt, black pepper, olive oil, water) unless the recipe uses an unusual amount' + dietaryRules;
@@ -286,7 +289,7 @@ function startServer(deps) {
 
   // AI recipe suggestions
   app.post("/api/recipe/suggest", async function (req, res) {
-    const { glutenFree, dairyFree, preferOrganic } = req.body;
+    const { glutenFree, dairyFree, preferOrganic, pickyEater } = req.body;
     const currentSettings = readJSON(SETTINGS_PATH) || {};
     const apiKey = currentSettings.anthropicApiKey;
 
@@ -301,6 +304,7 @@ function startServer(deps) {
     if (glutenFree) flags.push("gluten-free");
     if (dairyFree) flags.push("dairy-free");
     if (preferOrganic) flags.push("organic-preferred");
+    if (pickyEater) flags.push("picky-eater-friendly (simple, familiar, crowd-pleasing ingredients only)");
     if (flags.length > 0) {
       dietaryNote = "\nDietary requirements: " + flags.join(", ") + ". All suggestions must respect these constraints.";
     }

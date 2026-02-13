@@ -43,7 +43,7 @@
         </div>
         <div class="staple-search-row">
           <input type="text" id="staple-search-query" placeholder="Search Woodmans to add..." />
-          <button id="btn-staple-search" class="btn btn-sm btn-accent">Search</button>
+          <button id="btn-staple-search" class="btn btn-sm btn-accent">&#128269;</button>
         </div>
         <div id="staple-search-results" class="product-results" style="display:none;"></div>
       </section>
@@ -222,7 +222,7 @@
   <div id="modal-ai-recipe" class="modal-overlay" style="display:none;">
     <div class="modal">
       <div class="modal-header">
-        <h3>Generate Recipe with AI</h3>
+        <h3>AI Recipe</h3>
         <button class="btn-close" data-close="modal-ai-recipe">&times;</button>
       </div>
       <div class="modal-body">
@@ -242,7 +242,8 @@
           <input type="number" id="ai-recipe-servings" value="4" min="1" max="20" />
         </label>
         <div class="ai-options">
-          <label class="checkbox-label"><input type="checkbox" id="ai-gluten-free" /> Gluten Free</label>
+          <label class="checkbox-label"><input type="checkbox" id="ai-gluten-free" checked /> Gluten Free</label>
+          <label class="checkbox-label"><input type="checkbox" id="ai-picky-eater" checked /> Picky Eater</label>
           <label class="checkbox-label"><input type="checkbox" id="ai-dairy-free" /> Dairy Free</label>
           <label class="checkbox-label"><input type="checkbox" id="ai-prefer-organic" /> Prefer Organic</label>
         </div>

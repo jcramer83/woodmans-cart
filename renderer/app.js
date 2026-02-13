@@ -740,11 +740,12 @@ async function suggestRecipes() {
   btn.disabled = true;
 
   const glutenFree = document.getElementById("ai-gluten-free").checked;
+  const pickyEater = document.getElementById("ai-picky-eater").checked;
   const dairyFree = document.getElementById("ai-dairy-free").checked;
   const preferOrganic = document.getElementById("ai-prefer-organic").checked;
 
   try {
-    const result = await appApi.suggestRecipes({ glutenFree, dairyFree, preferOrganic });
+    const result = await appApi.suggestRecipes({ glutenFree, dairyFree, preferOrganic, pickyEater });
 
     if (result.error) {
       listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load suggestions.</span>';
@@ -778,6 +779,10 @@ function selectSuggestion(index) {
   const suggestions = window._aiSuggestions;
   if (!suggestions || !suggestions[index]) return;
   document.getElementById("ai-recipe-prompt").value = suggestions[index].name;
+  // Highlight selected chip
+  document.querySelectorAll(".ai-suggestion-chip").forEach((chip, i) => {
+    chip.classList.toggle("selected", i === index);
+  });
   document.getElementById("ai-recipe-prompt").focus();
 }
 
@@ -787,6 +792,7 @@ async function generateAiRecipe() {
 
   const servings = parseInt(document.getElementById("ai-recipe-servings").value) || 4;
   const glutenFree = document.getElementById("ai-gluten-free").checked;
+  const pickyEater = document.getElementById("ai-picky-eater").checked;
   const dairyFree = document.getElementById("ai-dairy-free").checked;
   const preferOrganic = document.getElementById("ai-prefer-organic").checked;
   const statusEl = document.getElementById("ai-recipe-status");
@@ -798,7 +804,7 @@ async function generateAiRecipe() {
   btn.disabled = true;
 
   try {
-    const result = await appApi.generateRecipe({ prompt, servings, glutenFree, dairyFree, preferOrganic });
+    const result = await appApi.generateRecipe({ prompt, servings, glutenFree, dairyFree, preferOrganic, pickyEater });
 
     if (result.error) {
       statusEl.textContent = "Error: " + result.error;
