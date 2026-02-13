@@ -650,11 +650,13 @@ function viewRecipe(id) {
   if (items.length > 0) {
     ingredientsList.innerHTML = items
       .map((item) => {
+        const thumb = item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : "";
         let text = "";
         if (item.quantity && item.quantity > 1) text += item.quantity + "x ";
-        text += esc(item.item || "");
+        text += esc(item.productName || item.item || "");
         if (item.note) text += " (" + esc(item.note) + ")";
-        return "<li>" + text + "</li>";
+        if (item.price) text += " - " + esc(item.price);
+        return `<li>${thumb}${text}</li>`;
       })
       .join("");
   } else {
@@ -854,6 +856,17 @@ async function generateAiRecipe() {
     document.getElementById("modal-ai-recipe").style.display = "none";
     viewRecipe(recipe.id);
 
+    // Look up product matches for each ingredient in background
+    matchRecipeProducts(recipe).then(() => {
+      appApi.saveRecipes(recipes);
+      renderRecipes();
+      renderCart();
+      // Update view modal if still open
+      if (document.getElementById("modal-view-recipe").style.display === "flex" && viewingRecipeId === recipe.id) {
+        viewRecipe(recipe.id);
+      }
+    });
+
     // Generate recipe image in background, update modal when ready
     appApi.generateRecipeImage(recipe.id, recipe.name).then((imgResult) => {
       if (imgResult && imgResult.imageUrl && !imgResult.error) {
@@ -874,6 +887,21 @@ async function generateAiRecipe() {
     statusEl.className = "ai-status error";
   } finally {
     btn.disabled = false;
+  }
+}
+
+async function matchRecipeProducts(recipe) {
+  for (const item of recipe.items) {
+    if (item.image) continue;
+    try {
+      const results = await appApi.searchProducts(item.item);
+      if (results && results.length > 0 && !results.error) {
+        const p = results[0];
+        item.productName = p.name || item.productName;
+        item.price = p.price || item.price;
+        item.image = p.image || "";
+      }
+    } catch {}
   }
 }
 
