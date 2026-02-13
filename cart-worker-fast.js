@@ -571,106 +571,116 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
     }
   }
 
-  // Phase 4: Build cart state from the last add response
+  // Phase 4: Read final cart state via V3 REST API
   let cartItems = [];
-  const lastCart = lastAddResponse?.body?.data?.updateCartItems?.cart;
-  const lastRawItems = lastCart?.cartItemCollection?.cartItems || lastCart?.items || lastCart?.cartItems;
-  if (lastRawItems) {
-    const rawCartItems = lastRawItems;
-    const cartItemIds = rawCartItems.map((ci) => ci.itemId).filter(Boolean);
+  try {
+    progress("Fetching final cart details...");
+    const cartRes = await withRetry(() => v3Get(session.cookies, `/v3/carts/${session.cartId}`));
+    const rawItems = cartRes.body?.cart?.items || [];
+    const v4Ids = rawItems.map((ci) => ci.v4_item_id).filter(Boolean);
 
-    if (cartItemIds.length > 0) {
-      progress("Fetching final cart details...");
+    if (v4Ids.length > 0) {
       const cartDetailsRes = await withRetry(() => gqlGet(session.cookies, "Items", {
-        ids: cartItemIds, shopId, zoneId: ZONE_ID, postalCode,
+        ids: v4Ids, shopId, zoneId: ZONE_ID, postalCode,
       }, HASHES.Items)).catch(() => null);
 
       const cartDetailMap = (cartDetailsRes && cartDetailsRes.body?.data?.items)
         ? parseItemDetails(cartDetailsRes.body.data.items) : {};
 
-      cartItems = rawCartItems.map((ci) => {
-        const detail = cartDetailMap[ci.itemId] || {};
+      cartItems = rawItems.map((ci) => {
+        const v4Id = ci.v4_item_id || "";
+        const detail = cartDetailMap[v4Id] || {};
         return {
-          name: detail.name || ci.itemId,
+          name: detail.name || v4Id || "Unknown",
           price: detail.price || "",
           size: detail.size || "",
           quantity: ci.quantity || 1,
         };
       });
     }
+  } catch (e) {
+    progress("Warning: could not fetch final cart state");
   }
 
   return { results, cartItems };
 }
 
-// --- GraphQL cart fetch ---
+// --- V3 REST helper for cart reading ---
 
-async function fetchCartViaGraphQL(session, progressCallback) {
+function v3Get(cookieString, path) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: "shopwoodmans.com",
+      path,
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "application/json",
+        Cookie: cookieString,
+        Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
+        "x-client-identifier": "web",
+      },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, body: data }); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
+    req.end();
+  });
+}
+
+// --- Cart fetch via V3 REST API ---
+
+async function fetchCartViaRest(session, progressCallback) {
   const progress = progressCallback || (() => {});
   const shopId = session.shopId || SHOP_IDS.instore;
   const postalCode = "53177";
-  const cartType = (session.mode === "pickup") ? "grocery" : "list";
 
-  progress("Fetching cart via GraphQL...");
+  progress("Fetching cart...");
 
-  // Send UpdateCartItemsMutation with a no-op update to get full cart state
-  // (empty cartItemUpdates was rejected as invalidInput since ~Feb 2026)
-  const res = await withRetry(() => gqlPost(session.cookies, {
-    operationName: "UpdateCartItemsMutation",
-    variables: {
-      cartItemUpdates: [{ itemId: "0", quantity: 0, quantityType: "each", trackingParams: {} }],
-      cartType,
-      requestTimestamp: Date.now(),
-      cartId: session.cartId,
-    },
-    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
-  }));
+  const res = await withRetry(() => v3Get(session.cookies, `/v3/carts/${session.cartId}`));
 
-  if (isSessionExpired(res)) {
+  if (res.status === 401 || res.status === 403) {
     closeFastSession();
     throw new Error("Session expired");
   }
 
-  if (res.body?.errors) {
-    throw new Error("GraphQL error: " + (res.body.errors[0]?.message || "unknown"));
+  const cart = res.body?.cart;
+  if (!cart) {
+    throw new Error("Could not read cart (status " + res.status + ")");
   }
 
-  // Try known response paths — Instacart may restructure these
-  const cart = res.body?.data?.updateCartItems?.cart;
-  const rawCartItems = cart?.cartItemCollection?.cartItems
-    || cart?.items
-    || cart?.cartItems;
-  if (!rawCartItems || !Array.isArray(rawCartItems)) {
-    // Dump enough of the response shape to diagnose remotely
-    const snippet = JSON.stringify(res.body, null, 2)?.substring(0, 800) || "(empty)";
-    progress(`Debug: status=${res.status}, response:\n${snippet}`);
-    throw new Error("Unexpected response structure — no cartItems found");
-  }
-
-  if (rawCartItems.length === 0) {
+  const rawItems = cart.items || [];
+  if (rawItems.length === 0) {
     progress("Cart is empty.");
     return [];
   }
 
-  // Enrich with Items query for name/price/size
-  const cartItemIds = rawCartItems.map((ci) => ci.itemId).filter(Boolean);
+  // Enrich with Items GraphQL query for name/price/size
+  const v4Ids = rawItems.map((ci) => ci.v4_item_id).filter(Boolean);
   let detailMap = {};
 
-  if (cartItemIds.length > 0) {
-    progress(`Fetching details for ${cartItemIds.length} cart item(s)...`);
+  if (v4Ids.length > 0) {
+    progress(`Fetching details for ${v4Ids.length} cart item(s)...`);
     const detailsRes = await withRetry(() => gqlGet(session.cookies, "Items", {
-      ids: cartItemIds, shopId, zoneId: ZONE_ID, postalCode,
-    }, HASHES.Items));
+      ids: v4Ids, shopId, zoneId: ZONE_ID, postalCode,
+    }, HASHES.Items)).catch(() => null);
 
-    if (!isSessionExpired(detailsRes) && detailsRes.body?.data?.items) {
+    if (detailsRes && !isSessionExpired(detailsRes) && detailsRes.body?.data?.items) {
       detailMap = parseItemDetails(detailsRes.body.data.items);
     }
   }
 
-  const cartItems = rawCartItems.map((ci) => {
-    const detail = detailMap[ci.itemId] || {};
+  const cartItems = rawItems.map((ci) => {
+    const v4Id = ci.v4_item_id || "";
+    const detail = detailMap[v4Id] || {};
     return {
-      name: detail.name || ci.itemId,
+      name: detail.name || v4Id || ci.item_id || "Unknown",
       price: detail.price || "",
       size: detail.size || "",
       quantity: ci.quantity || 1,
@@ -681,53 +691,43 @@ async function fetchCartViaGraphQL(session, progressCallback) {
   return cartItems;
 }
 
-// --- GraphQL cart removal ---
+// --- Cart removal via V3 REST + GraphQL ---
 
-async function removeAllCartItemsViaGraphQL(session, progressCallback) {
+async function removeAllCartItemsViaRest(session, progressCallback) {
   const progress = progressCallback || (() => {});
   const cartType = (session.mode === "pickup") ? "grocery" : "list";
 
-  // Step 1: Fetch current cart items via no-op update
+  // Step 1: Read cart via V3 REST to get item IDs
   progress("Fetching cart contents for removal...");
-  const fetchRes = await withRetry(() => gqlPost(session.cookies, {
-    operationName: "UpdateCartItemsMutation",
-    variables: {
-      cartItemUpdates: [{ itemId: "0", quantity: 0, quantityType: "each", trackingParams: {} }],
-      cartType,
-      requestTimestamp: Date.now(),
-      cartId: session.cartId,
-    },
-    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
-  }));
+  const fetchRes = await withRetry(() => v3Get(session.cookies, `/v3/carts/${session.cartId}`));
 
-  if (isSessionExpired(fetchRes)) {
+  if (fetchRes.status === 401 || fetchRes.status === 403) {
     closeFastSession();
     throw new Error("Session expired");
   }
 
-  if (fetchRes.body?.errors) {
-    throw new Error("GraphQL error: " + (fetchRes.body.errors[0]?.message || "unknown"));
-  }
-
-  const fetchCart = fetchRes.body?.data?.updateCartItems?.cart;
-  const rawCartItems = fetchCart?.cartItemCollection?.cartItems
-    || fetchCart?.items
-    || fetchCart?.cartItems;
-  if (!rawCartItems || rawCartItems.length === 0) {
+  const rawItems = fetchRes.body?.cart?.items || [];
+  if (rawItems.length === 0) {
     progress("Cart is already empty.");
     return { removed: 0 };
   }
 
-  // Step 2: Batch remove — set quantity:0 for all items
-  progress(`Removing ${rawCartItems.length} item(s) from cart...`);
-  const removeUpdates = rawCartItems
-    .filter((ci) => ci.itemId)
-    .map((ci) => ({
-      itemId: ci.itemId,
+  // Step 2: Batch remove via GraphQL — set quantity:0 using v4_item_id
+  progress(`Removing ${rawItems.length} item(s) from cart...`);
+  const removeUpdates = rawItems
+    .map((ci) => ci.v4_item_id)
+    .filter(Boolean)
+    .map((id) => ({
+      itemId: id,
       quantity: 0,
       quantityType: "each",
       trackingParams: {},
     }));
+
+  if (removeUpdates.length === 0) {
+    progress("No removable items found.");
+    return { removed: 0 };
+  }
 
   const removeRes = await withRetry(() => gqlPost(session.cookies, {
     operationName: "UpdateCartItemsMutation",
@@ -745,19 +745,20 @@ async function removeAllCartItemsViaGraphQL(session, progressCallback) {
     throw new Error("Session expired");
   }
 
-  // Step 3: Verify — check if any items remain
-  const removeCart = removeRes.body?.data?.updateCartItems?.cart;
-  const remaining = removeCart?.cartItemCollection?.cartItems || removeCart?.items || removeCart?.cartItems || [];
+  // Step 3: Verify via V3 REST
+  const verifyRes = await withRetry(() => v3Get(session.cookies, `/v3/carts/${session.cartId}`)).catch(() => null);
+  const remaining = verifyRes?.body?.cart?.items || [];
 
   if (remaining.length > 0) {
     // Fallback: remove stragglers one by one
     progress(`${remaining.length} item(s) remain — removing individually...`);
     for (const ci of remaining) {
-      if (!ci.itemId) continue;
+      const itemId = ci.v4_item_id;
+      if (!itemId) continue;
       await withRetry(() => gqlPost(session.cookies, {
         operationName: "UpdateCartItemsMutation",
         variables: {
-          cartItemUpdates: [{ itemId: ci.itemId, quantity: 0, quantityType: "each", trackingParams: {} }],
+          cartItemUpdates: [{ itemId, quantity: 0, quantityType: "each", trackingParams: {} }],
           cartType,
           requestTimestamp: Date.now(),
           cartId: session.cartId,
@@ -767,17 +768,17 @@ async function removeAllCartItemsViaGraphQL(session, progressCallback) {
     }
   }
 
-  const removed = rawCartItems.length;
+  const removed = rawItems.length;
   progress(`Removed ${removed} item(s) from cart.`);
   return { removed };
 }
 
 async function fetchCart(session, progressCallback) {
-  return await fetchCartViaGraphQL(session, progressCallback);
+  return await fetchCartViaRest(session, progressCallback);
 }
 
 async function removeAllCartItems(session, progressCallback) {
-  return await removeAllCartItemsViaGraphQL(session, progressCallback);
+  return await removeAllCartItemsViaRest(session, progressCallback);
 }
 
 module.exports = {
