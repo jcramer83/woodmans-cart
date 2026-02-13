@@ -10,7 +10,13 @@ const path = require("path");
 // In Docker slim mode (no Playwright), those features gracefully degrade.
 function getChromium() {
   try {
-    return require("playwright").chromium;
+    const pw = require("playwright");
+    if (!pw || !pw.chromium) return null;
+    // Check that the browser binary actually exists
+    const fs = require("fs");
+    const execPath = pw.chromium.executablePath();
+    if (!execPath || !fs.existsSync(execPath)) return null;
+    return pw.chromium;
   } catch {
     return null;
   }
