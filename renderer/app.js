@@ -237,6 +237,7 @@ function renderStaples() {
     .map(
       (s) => `
     <div class="item-row" data-id="${s.id}">
+      ${s.image ? `<img class="item-thumb" src="${esc(s.image)}" alt="">` : ""}
       <div class="item-info">
         <div class="item-name">${esc(s.productName || s.item)}</div>
         <div class="item-detail">${s.price ? esc(s.price) : ""}${s.note ? (s.price ? " - " : "") + esc(s.note) : ""}</div>
@@ -352,6 +353,7 @@ async function selectStapleSearchResult(index) {
     productName: p.name,
     brand: "",
     price: p.price || "",
+    image: p.image || "",
   };
 
   staples.push(staple);
@@ -470,6 +472,7 @@ function openRecipeItemModal(index) {
     '<p class="empty-state">Enter a search term and click Search.</p>';
 
   window._recipeItemSelectedPrice = item ? item.price || "" : "";
+  window._recipeItemSelectedImage = item ? item.image || "" : "";
   document.getElementById("modal-recipe-item").style.display = "flex";
   document.getElementById("recipe-item-name").focus();
 }
@@ -485,6 +488,7 @@ function saveRecipeItem() {
     note: document.getElementById("recipe-item-note").value.trim(),
     productName: productName,
     price: window._recipeItemSelectedPrice || "",
+    image: window._recipeItemSelectedImage || "",
   };
 
   if (editingRecipeItemIndex >= 0) {
@@ -561,6 +565,7 @@ function selectRecipeItemProduct(index) {
   const p = products[index];
   document.getElementById("recipe-item-product-name").value = p.name;
   window._recipeItemSelectedPrice = p.price || "";
+  window._recipeItemSelectedImage = p.image || "";
   const nameField = document.getElementById("recipe-item-name");
   if (!nameField.value.trim()) {
     nameField.value = p.name;
@@ -886,6 +891,7 @@ function getCartItems() {
       quantity: s.quantity || 1,
       note: s.note,
       price: s.price || "",
+      image: s.image || "",
       source: "staple",
     });
   }
@@ -901,6 +907,7 @@ function getCartItems() {
         quantity: item.quantity || 1,
         note: item.note,
         price: item.price || "",
+        image: item.image || "",
         source: r.name,
       });
     }
@@ -914,6 +921,7 @@ function getCartItems() {
       quantity: m.quantity || 1,
       note: "",
       price: m.price || "",
+      image: m.image || "",
       source: "manual",
     });
   }
@@ -957,6 +965,7 @@ function renderCart() {
           : "";
         return `
     <div class="item-row${rowClass}">
+      ${item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : ""}
       <div class="item-info">
         <div class="item-name">${esc(item.item)}</div>
         <div class="item-detail">${item.note ? esc(item.note) : ""}${item.price ? " - " + esc(item.price) : ""}</div>
@@ -1097,6 +1106,7 @@ function selectManualProduct(index) {
     item: p.name,
     quantity: 1,
     price: p.price || "",
+    image: p.image || "",
   });
 
   renderCart();

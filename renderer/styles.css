@@ -237,6 +237,15 @@ a.btn-icon { text-decoration: none; }
 
 .item-row:hover { background: #f9f9f9; }
 
+.item-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #fff;
+}
+
 .item-info {
   flex: 1;
   min-width: 0;
