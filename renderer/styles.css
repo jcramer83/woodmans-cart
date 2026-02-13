@@ -403,26 +403,12 @@ a.btn-icon { text-decoration: none; }
   border-radius: 6px;
 }
 
-/* Manual add row */
-.manual-add-row {
-  display: flex;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
+/* Manual search results (cart section) */
+#manual-search-results {
+  max-height: 400px;
+  overflow-y: auto;
   margin-top: 8px;
   flex-shrink: 0;
-}
-
-.manual-add-row input[type="text"] { flex: 1; }
-
-.manual-add-row input[type="number"] { width: 60px; }
-
-#manual-search-area {
-  padding-top: 8px;
-  border-top: 1px solid #eee;
-  margin-top: 8px;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 /* Inputs */
@@ -731,6 +717,93 @@ label input, label select {
   margin: 0;
   accent-color: #c62828;
   cursor: pointer;
+}
+
+/* AI modal hero image */
+.ai-modal-hero {
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 8px;
+  opacity: 0.85;
+  border-radius: 12px;
+}
+
+/* AI suggestion chips */
+.ai-suggestions {
+  margin-bottom: 12px;
+}
+
+.ai-suggestions-header {
+  margin-bottom: 4px;
+}
+
+.ai-suggestions-label {
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+}
+
+.ai-suggestions-loading {
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+  padding: 8px 0;
+  display: block;
+  text-align: center;
+}
+
+.ai-suggestions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ai-suggestion-chip {
+  padding: 8px 12px;
+  background: #fff5f5;
+  border: 1px solid #ffcdd2;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex: 1 1 calc(50% - 4px);
+  min-width: 140px;
+}
+
+.ai-suggestion-chip:hover {
+  background: #ffebee;
+  border-color: #ef9a9a;
+}
+
+.ai-suggestion-chip .chip-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ai-suggestion-chip .chip-desc {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+/* Cooking loading animation */
+.ai-loading-animation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-loading-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  animation: ai-cook-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-cook-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
 }
 
 /* AI status */
@@ -1054,13 +1127,6 @@ body.dark .staple-edit-product {
   color: #e0e0e0;
 }
 
-body.dark .manual-add-row {
-  border-top-color: #2c2c2c;
-}
-
-body.dark #manual-search-area {
-  border-top-color: #2c2c2c;
-}
 
 body.dark .product-results {
   border-color: #2c2c2c;
@@ -1101,6 +1167,36 @@ body.dark .cart-progress-fill {
 body.dark .progress-log {
   background: #0e0e0e;
   border: 1px solid #2c2c2c;
+}
+
+body.dark .ai-modal-hero {
+  opacity: 0.7;
+}
+
+body.dark .ai-suggestions-label {
+  color: #777;
+}
+
+body.dark .ai-suggestions-loading {
+  color: #666;
+}
+
+body.dark .ai-suggestion-chip {
+  background: #2a1a1a;
+  border-color: #3d2020;
+}
+
+body.dark .ai-suggestion-chip:hover {
+  background: #3a2020;
+  border-color: #ef5350;
+}
+
+body.dark .ai-suggestion-chip .chip-name {
+  color: #e0e0e0;
+}
+
+body.dark .ai-suggestion-chip .chip-desc {
+  color: #999;
 }
 
 body.dark .ai-status.loading {
@@ -1417,20 +1513,6 @@ body.dark .recipe-view-instructions li {
     padding: 6px 10px;
   }
 
-  /* Manual add row: stack on small screens */
-  .manual-add-row {
-    flex-wrap: wrap;
-  }
-
-  .manual-add-row input[type="text"] {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
-
-  .manual-add-row input[type="number"] {
-    width: 60px;
-  }
-
   /* Inputs: bigger for touch */
   input[type="text"],
   input[type="password"],
@@ -1540,6 +1622,17 @@ body.dark .recipe-view-instructions li {
   .empty-state-img {
     width: 64px;
     height: 64px;
+  }
+
+  /* AI modal hero: smaller on mobile */
+  .ai-modal-hero {
+    width: 60px;
+    height: 60px;
+  }
+
+  /* AI suggestions: single-column on mobile */
+  .ai-suggestion-chip {
+    flex: 1 1 100%;
   }
 
   /* Cart estimate */

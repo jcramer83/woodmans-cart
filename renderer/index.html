@@ -75,21 +75,11 @@
           <p class="empty-state">Cart is empty. Add staples or enable recipes to populate.</p>
         </div>
         <!-- Manual item add row -->
-        <div class="manual-add-row">
-          <input type="text" id="manual-item-name" placeholder="Add item manually..." />
-          <input type="number" id="manual-item-qty" value="1" min="1" max="99" />
-          <button id="btn-manual-search" class="btn btn-sm" title="Search Woodmans">&#128269;</button>
-          <button id="btn-manual-add" class="btn btn-sm btn-accent">Add</button>
+        <div class="staple-search-row">
+          <input type="text" id="manual-search-query" placeholder="Search Woodmans to add..." />
+          <button id="btn-manual-search-go" class="btn btn-sm btn-accent">&#128269;</button>
         </div>
-        <div id="manual-search-area" style="display:none;">
-          <div class="product-search-input-row">
-            <input type="text" id="manual-search-query" placeholder="Search Woodmans..." />
-            <button id="btn-manual-search-go" class="btn btn-sm">Search</button>
-          </div>
-          <div id="manual-search-results" class="product-results">
-            <p class="empty-state">Enter a search term and click Search.</p>
-          </div>
-        </div>
+        <div id="manual-search-results" class="product-results" style="display:none;"></div>
       </section>
 
       <!-- Action section -->
@@ -236,10 +226,17 @@
         <button class="btn-close" data-close="modal-ai-recipe">&times;</button>
       </div>
       <div class="modal-body">
+        <img class="ai-modal-hero" src="/assets/ai-recipe-hero.png" alt="" />
         <label>
           What do you want to make?
           <input type="text" id="ai-recipe-prompt" placeholder="e.g. steak tacos, chicken stir fry" />
         </label>
+        <div id="ai-suggestions" class="ai-suggestions" style="display:none;">
+          <div class="ai-suggestions-header">
+            <span class="ai-suggestions-label">Recipe ideas</span>
+          </div>
+          <div id="ai-suggestions-list" class="ai-suggestions-list"></div>
+        </div>
         <label>
           Servings
           <input type="number" id="ai-recipe-servings" value="4" min="1" max="20" />
@@ -253,6 +250,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn" data-close="modal-ai-recipe">Cancel</button>
+        <button id="btn-ai-suggest" class="btn">Suggest Ideas</button>
         <button id="btn-ai-generate" class="btn btn-accent">Generate</button>
       </div>
     </div>

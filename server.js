@@ -284,6 +284,85 @@ function startServer(deps) {
     }
   });
 
+  // AI recipe suggestions
+  app.post("/api/recipe/suggest", async function (req, res) {
+    const { glutenFree, dairyFree, preferOrganic } = req.body;
+    const currentSettings = readJSON(SETTINGS_PATH) || {};
+    const apiKey = currentSettings.anthropicApiKey;
+
+    if (!apiKey) {
+      return res.json({ error: "No Claude API key configured. Add it in Settings." });
+    }
+
+    const httpsModule = require("https");
+
+    var dietaryNote = "";
+    var flags = [];
+    if (glutenFree) flags.push("gluten-free");
+    if (dairyFree) flags.push("dairy-free");
+    if (preferOrganic) flags.push("organic-preferred");
+    if (flags.length > 0) {
+      dietaryNote = "\nDietary requirements: " + flags.join(", ") + ". All suggestions must respect these constraints.";
+    }
+
+    const body = JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: "You suggest dinner recipe ideas. Return ONLY valid JSON, no other text.",
+      messages: [{
+        role: "user",
+        content: "Suggest 6 diverse dinner recipe ideas. Mix cuisines and styles (e.g. comfort food, healthy, quick weeknight, slow-cooked, international). Return a JSON array of objects with \"name\" (recipe title, 2-5 words) and \"description\" (one short enticing sentence, max 12 words)." + dietaryNote
+      }],
+    });
+
+    try {
+      const result = await new Promise(function (resolve, reject) {
+        const reqObj = httpsModule.request(
+          {
+            hostname: "api.anthropic.com",
+            path: "/v1/messages",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+          },
+          function (apiRes) {
+            let data = "";
+            apiRes.on("data", function (chunk) { data += chunk; });
+            apiRes.on("end", function () {
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.error) {
+                  reject(new Error(parsed.error.message || "API error"));
+                  return;
+                }
+                const text = (parsed.content && parsed.content[0] && parsed.content[0].text) || "";
+                resolve(text);
+              } catch (e) {
+                reject(new Error("Failed to parse API response"));
+              }
+            });
+          }
+        );
+        reqObj.on("error", reject);
+        reqObj.write(body);
+        reqObj.end();
+      });
+
+      const jsonMatch = result.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        return res.json({ error: "Could not parse suggestions from AI response." });
+      }
+
+      const suggestions = JSON.parse(jsonMatch[0]);
+      res.json({ suggestions: suggestions });
+    } catch (err) {
+      res.json({ error: err.message });
+    }
+  });
+
   // Recipe image search (web) — search DuckDuckGo images, download & cache
   app.post("/api/recipe/image", async function (req, res) {
     const { recipeId, recipeName } = req.body;

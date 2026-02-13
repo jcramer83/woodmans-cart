@@ -78,6 +78,7 @@
 
     // AI recipe generation
     generateRecipe: function (data) { return apiPost("/api/recipe/generate", data); },
+    suggestRecipes: function (data) { return apiPost("/api/recipe/suggest", data); },
 
     // Recipe image generation
     generateRecipeImage: function (id, name) { return apiPost("/api/recipe/image", { recipeId: id, recipeName: name }); },

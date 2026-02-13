@@ -94,6 +94,7 @@ function bindEvents() {
   // AI recipe
   document.getElementById("btn-ai-recipe").addEventListener("click", openAiRecipeModal);
   document.getElementById("btn-ai-generate").addEventListener("click", generateAiRecipe);
+  document.getElementById("btn-ai-suggest").addEventListener("click", suggestRecipes);
   document.getElementById("ai-recipe-prompt").addEventListener("keydown", (e) => {
     if (e.key === "Enter") generateAiRecipe();
   });
@@ -113,12 +114,7 @@ function bindEvents() {
   // Clear cart
   document.getElementById("btn-clear-cart").addEventListener("click", clearCart);
 
-  // Manual cart add
-  document.getElementById("btn-manual-add").addEventListener("click", addManualItem);
-  document.getElementById("manual-item-name").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") addManualItem();
-  });
-  document.getElementById("btn-manual-search").addEventListener("click", toggleManualSearch);
+  // Manual cart add (search-and-add, same as staples)
   document.getElementById("btn-manual-search-go").addEventListener("click", doManualSearch);
   document.getElementById("manual-search-query").addEventListener("keydown", (e) => {
     if (e.key === "Enter") doManualSearch();
@@ -723,10 +719,66 @@ function openAiRecipeModal() {
   document.getElementById("ai-recipe-prompt").value = "";
   document.getElementById("ai-recipe-servings").value = "4";
   document.getElementById("ai-recipe-status").style.display = "none";
+  document.getElementById("ai-recipe-status").innerHTML = "";
   document.getElementById("btn-ai-generate").disabled = false;
+  document.getElementById("ai-suggestions").style.display = "none";
+  document.getElementById("ai-suggestions-list").innerHTML = "";
   document.getElementById("modal-ai-recipe").style.display = "flex";
   document.getElementById("ai-recipe-prompt").focus();
   // Preserve checkbox state across opens (user preference)
+  // Auto-fetch suggestions in background
+  suggestRecipes();
+}
+
+async function suggestRecipes() {
+  const suggestionsEl = document.getElementById("ai-suggestions");
+  const listEl = document.getElementById("ai-suggestions-list");
+  const btn = document.getElementById("btn-ai-suggest");
+
+  suggestionsEl.style.display = "block";
+  listEl.innerHTML = '<span class="ai-suggestions-loading">Getting ideas...</span>';
+  btn.disabled = true;
+
+  const glutenFree = document.getElementById("ai-gluten-free").checked;
+  const dairyFree = document.getElementById("ai-dairy-free").checked;
+  const preferOrganic = document.getElementById("ai-prefer-organic").checked;
+
+  try {
+    const result = await appApi.suggestRecipes({ glutenFree, dairyFree, preferOrganic });
+
+    if (result.error) {
+      listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load suggestions.</span>';
+      btn.disabled = false;
+      return;
+    }
+
+    const suggestions = result.suggestions || [];
+    if (suggestions.length === 0) {
+      listEl.innerHTML = '<span class="ai-suggestions-loading">No suggestions returned.</span>';
+      btn.disabled = false;
+      return;
+    }
+
+    listEl.innerHTML = suggestions.map((s, i) =>
+      '<div class="ai-suggestion-chip" onclick="selectSuggestion(' + i + ')">' +
+        '<div class="chip-name">' + esc(s.name) + '</div>' +
+        '<div class="chip-desc">' + esc(s.description) + '</div>' +
+      '</div>'
+    ).join("");
+
+    window._aiSuggestions = suggestions;
+  } catch (err) {
+    listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load suggestions.</span>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function selectSuggestion(index) {
+  const suggestions = window._aiSuggestions;
+  if (!suggestions || !suggestions[index]) return;
+  document.getElementById("ai-recipe-prompt").value = suggestions[index].name;
+  document.getElementById("ai-recipe-prompt").focus();
 }
 
 async function generateAiRecipe() {
@@ -741,7 +793,7 @@ async function generateAiRecipe() {
   const btn = document.getElementById("btn-ai-generate");
 
   statusEl.style.display = "block";
-  statusEl.textContent = "Generating recipe with Claude AI...";
+  statusEl.innerHTML = '<div class="ai-loading-animation"><img class="ai-loading-img" src="/assets/cooking-loading.png" alt="" /><span>Cooking up your recipe...</span></div>';
   statusEl.className = "ai-status loading";
   btn.disabled = true;
 
@@ -904,34 +956,14 @@ function renderCart() {
     )
     .join("");
 
-  // Lock/unlock manual add row and staple/recipe controls
-  const manualRow = document.querySelector(".manual-add-row");
-  const manualSearch = document.getElementById("manual-search-area");
-  if (manualRow) manualRow.style.display = cartRunning ? "none" : "flex";
-  if (manualSearch && cartRunning) manualSearch.style.display = "none";
+  // Lock/unlock manual search and staple/recipe controls
+  const manualSearchRow = document.querySelector(".right-col .staple-search-row");
+  if (manualSearchRow) manualSearchRow.style.display = cartRunning ? "none" : "flex";
+  const manualResults = document.getElementById("manual-search-results");
+  if (manualResults && cartRunning) manualResults.style.display = "none";
   document.getElementById("btn-clear-cart").style.display = cartRunning ? "none" : "inline-flex";
   document.getElementById("btn-add-all-staples").disabled = cartRunning;
   document.getElementById("btn-add-recipe").disabled = cartRunning;
-}
-
-function addManualItem() {
-  const nameInput = document.getElementById("manual-item-name");
-  const qtyInput = document.getElementById("manual-item-qty");
-  const name = nameInput.value.trim();
-  if (!name) return;
-
-  manualItems.push({
-    id: generateId(),
-    item: name,
-    quantity: parseInt(qtyInput.value) || 1,
-    price: window._manualSelectedPrice || "",
-  });
-
-  nameInput.value = "";
-  qtyInput.value = "1";
-  window._manualSelectedPrice = "";
-  renderCart();
-  nameInput.focus();
 }
 
 function removeManualItem(id) {
@@ -996,39 +1028,27 @@ function changeCartQty(id, delta) {
   }
 }
 
-// --- Manual item product search ---
-
-function toggleManualSearch() {
-  const area = document.getElementById("manual-search-area");
-  area.style.display = area.style.display === "none" ? "block" : "none";
-  if (area.style.display === "block") {
-    const itemName = document.getElementById("manual-item-name").value.trim();
-    document.getElementById("manual-search-query").value = itemName;
-    document.getElementById("manual-search-query").focus();
-  }
-}
+// --- Manual item product search (same pattern as staples) ---
 
 async function doManualSearch() {
   const query = document.getElementById("manual-search-query").value.trim();
   if (!query) return;
 
   const resultsDiv = document.getElementById("manual-search-results");
+  resultsDiv.style.display = "block";
   resultsDiv.innerHTML = '<p class="empty-state">Searching...</p>';
   document.getElementById("btn-manual-search-go").disabled = true;
-  showActivity("cart-activity", "cart-activity-status", "Searching Woodmans for \"" + query + "\"...");
 
   try {
     const products = await appApi.searchProducts(query);
 
     if (products.error) {
       resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(products.error)}</p>`;
-      hideActivity("cart-activity", "cart-activity-status", "Search failed: " + products.error, "error");
       return;
     }
 
     if (!products || products.length === 0) {
-      resultsDiv.innerHTML = '<p class="empty-state">No products found. Try a different search term.</p>';
-      hideActivity("cart-activity", "cart-activity-status", "No products found", "error");
+      resultsDiv.innerHTML = '<p class="empty-state">No products found. Try a different search.</p>';
       return;
     }
 
@@ -1043,10 +1063,8 @@ async function doManualSearch() {
       .join("");
 
     window._manualSearchResults = products;
-    hideActivity("cart-activity", "cart-activity-status", "Found " + products.length + " products", "success");
   } catch (err) {
     resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(err.message)}</p>`;
-    hideActivity("cart-activity", "cart-activity-status", "Search error: " + err.message, "error");
   } finally {
     document.getElementById("btn-manual-search-go").disabled = false;
   }
@@ -1057,9 +1075,19 @@ function selectManualProduct(index) {
   if (!products || !products[index]) return;
 
   const p = products[index];
-  document.getElementById("manual-item-name").value = p.name;
-  window._manualSelectedPrice = p.price || "";
-  document.getElementById("manual-search-area").style.display = "none";
+  manualItems.push({
+    id: generateId(),
+    item: p.name,
+    quantity: 1,
+    price: p.price || "",
+  });
+
+  renderCart();
+
+  // Clear search
+  document.getElementById("manual-search-query").value = "";
+  document.getElementById("manual-search-results").style.display = "none";
+  document.getElementById("manual-search-query").focus();
 }
 
 // --- Current Woodmans Online Cart ---
@@ -1396,6 +1424,7 @@ window.changeCartQty = changeCartQty;
 window.openRecipeItemModal = openRecipeItemModal;
 window.selectRecipeItemProduct = selectRecipeItemProduct;
 window.selectManualProduct = selectManualProduct;
+window.selectSuggestion = selectSuggestion;
 window.viewRecipe = viewRecipe;
 window.printRecipe = printRecipe;
 window.openRecipeExternal = openRecipeExternal;
