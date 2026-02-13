@@ -322,8 +322,11 @@ async function doStapleSearch() {
       .map(
         (p, i) => `
       <div class="product-result-row" onclick="selectStapleSearchResult(${i})">
-        <div class="product-result-name">${esc(p.name)}</div>
-        <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
+        ${p.image ? `<img class="product-result-thumb" src="${esc(p.image)}" alt="">` : ""}
+        <div class="product-result-info">
+          <div class="product-result-name">${esc(p.name)}</div>
+          <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
+        </div>
       </div>`
       )
       .join("");
@@ -532,8 +535,11 @@ async function doRecipeItemSearch() {
       .map(
         (p, i) => `
       <div class="product-result-row" onclick="selectRecipeItemProduct(${i})">
-        <div class="product-result-name">${esc(p.name)}</div>
-        <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
+        ${p.image ? `<img class="product-result-thumb" src="${esc(p.image)}" alt="">` : ""}
+        <div class="product-result-info">
+          <div class="product-result-name">${esc(p.name)}</div>
+          <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
+        </div>
       </div>`
       )
       .join("");
@@ -1064,8 +1070,11 @@ async function doManualSearch() {
       .map(
         (p, i) => `
       <div class="product-result-row" onclick="selectManualProduct(${i})">
-        <div class="product-result-name">${esc(p.name)}</div>
-        <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
+        ${p.image ? `<img class="product-result-thumb" src="${esc(p.image)}" alt="">` : ""}
+        <div class="product-result-info">
+          <div class="product-result-name">${esc(p.name)}</div>
+          <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
+        </div>
       </div>`
       )
       .join("");

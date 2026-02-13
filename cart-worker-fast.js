@@ -340,7 +340,9 @@ function parseItemDetails(itemsArray) {
       const m = s.match(/\$[\d.]+/);
       if (m) price = m[0];
     }
-    map[item.id] = { name: item.name || "", price, size: item.size || "" };
+    const imgObj = item.viewSection?.itemImage;
+    const image = imgObj?.templateUrl?.replace("{width=}", "96").replace("{height=}", "96") || imgObj?.url || "";
+    map[item.id] = { name: item.name || "", price, size: item.size || "", image };
   }
   return map;
 }

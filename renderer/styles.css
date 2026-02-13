@@ -635,6 +635,22 @@ label input, label select {
   cursor: pointer;
   border-bottom: 1px solid #f0f0f0;
   transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.product-result-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.product-result-info {
+  min-width: 0;
 }
 
 .product-result-row:last-child { border-bottom: none; }
