@@ -802,6 +802,8 @@ async function generateAiRecipe() {
   statusEl.innerHTML = '<div class="ai-loading-animation"><img class="ai-loading-img" src="/assets/cooking-loading.png" alt="" /><span>Cooking up your recipe...</span></div>';
   statusEl.className = "ai-status loading";
   btn.disabled = true;
+  // Scroll status into view on mobile where it may be off-screen
+  statusEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
   try {
     const result = await appApi.generateRecipe({ prompt, servings, glutenFree, dairyFree, preferOrganic, pickyEater });
