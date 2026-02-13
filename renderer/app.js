@@ -77,16 +77,15 @@ async function init() {
 
 function bindEvents() {
   // Staples
-  document.getElementById("btn-add-staple").addEventListener("click", () => openStapleModal(null));
   document.getElementById("btn-add-all-staples").addEventListener("click", addAllStaplesToCart);
+  document.getElementById("btn-staple-search").addEventListener("click", doStapleSearch);
+  document.getElementById("staple-search-query").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doStapleSearch();
+  });
+  document.getElementById("btn-save-staple").addEventListener("click", saveStaple);
 
   // Recipes
   document.getElementById("btn-add-recipe").addEventListener("click", () => openRecipeModal(null));
-
-  // Staple modal - product search
-  document.getElementById("btn-find-product").addEventListener("click", toggleProductSearch);
-  document.getElementById("btn-product-search-go").addEventListener("click", doProductSearch);
-  document.getElementById("btn-save-staple").addEventListener("click", saveStaple);
 
   // Recipe modal
   document.getElementById("btn-add-recipe-item").addEventListener("click", addRecipeItemRow);
@@ -194,10 +193,6 @@ function bindEvents() {
     }
   });
 
-  // Enter to submit in product search
-  document.getElementById("product-search-query").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doProductSearch();
-  });
 }
 
 // --- Settings ---
@@ -238,7 +233,7 @@ function initDarkMode() {
 function renderStaples() {
   const list = document.getElementById("staples-list");
   if (staples.length === 0) {
-    list.innerHTML = '<p class="empty-state">No staples yet. Click "+ Add" to get started.</p>';
+    list.innerHTML = '<p class="empty-state">No staples yet. Search below to add items.</p>';
     return;
   }
 
@@ -247,8 +242,8 @@ function renderStaples() {
       (s) => `
     <div class="item-row" data-id="${s.id}">
       <div class="item-info">
-        <div class="item-name">${esc(s.item)}</div>
-        <div class="item-detail">${esc(s.productName || "")}${s.brand ? " - " + esc(s.brand) : ""}${s.note ? " (" + esc(s.note) + ")" : ""}</div>
+        <div class="item-name">${esc(s.productName || s.item)}</div>
+        <div class="item-detail">${s.price ? esc(s.price) : ""}${s.note ? (s.price ? " - " : "") + esc(s.note) : ""}</div>
       </div>
       <span class="item-qty">x${s.quantity || 1}</span>
       <div class="item-actions">
@@ -263,44 +258,23 @@ function renderStaples() {
 function openStapleModal(id) {
   editingStapleId = id;
   const staple = id ? staples.find((s) => s.id === id) : null;
+  if (!staple) return;
 
-  document.getElementById("staple-modal-title").textContent = staple ? "Edit Staple" : "Add Staple";
-  document.getElementById("staple-item").value = staple ? staple.item : "";
-  document.getElementById("staple-quantity").value = staple ? staple.quantity || 1 : 1;
-  document.getElementById("staple-note").value = staple ? staple.note || "" : "";
-  document.getElementById("staple-product-name").value = staple ? staple.productName || "" : "";
-  document.getElementById("staple-brand").value = staple ? staple.brand || "" : "";
-  document.getElementById("staple-price").value = staple ? staple.price || "" : "";
-  document.getElementById("product-search-area").style.display = "none";
-  document.getElementById("product-search-results").innerHTML =
-    '<p class="empty-state">Enter a search term and click Search.</p>';
+  document.getElementById("staple-edit-product").textContent = staple.productName || staple.item;
+  document.getElementById("staple-quantity").value = staple.quantity || 1;
+  document.getElementById("staple-note").value = staple.note || "";
 
   document.getElementById("modal-staple").style.display = "flex";
-  document.getElementById("staple-item").focus();
+  document.getElementById("staple-quantity").focus();
 }
 
 async function saveStaple() {
-  const item = document.getElementById("staple-item").value.trim();
-  if (!item) return;
+  if (!editingStapleId) return;
+  const idx = staples.findIndex((s) => s.id === editingStapleId);
+  if (idx === -1) return;
 
-  const data = {
-    item,
-    quantity: parseInt(document.getElementById("staple-quantity").value) || 1,
-    note: document.getElementById("staple-note").value.trim(),
-    productName: document.getElementById("staple-product-name").value.trim(),
-    brand: document.getElementById("staple-brand").value.trim(),
-    price: document.getElementById("staple-price").value.trim(),
-  };
-
-  if (editingStapleId) {
-    const idx = staples.findIndex((s) => s.id === editingStapleId);
-    if (idx !== -1) {
-      staples[idx] = { ...staples[idx], ...data };
-    }
-  } else {
-    data.id = generateId();
-    staples.push(data);
-  }
+  staples[idx].quantity = parseInt(document.getElementById("staple-quantity").value) || 1;
+  staples[idx].note = document.getElementById("staple-note").value.trim();
 
   await appApi.saveStaples(staples);
   renderStaples();
@@ -324,75 +298,72 @@ function addAllStaplesToCart() {
   renderCart();
 }
 
-// --- Product search ---
+// --- Staple search (inline) ---
 
-function toggleProductSearch() {
-  const area = document.getElementById("product-search-area");
-  area.style.display = area.style.display === "none" ? "block" : "none";
-  if (area.style.display === "block") {
-    const itemName = document.getElementById("staple-item").value.trim();
-    document.getElementById("product-search-query").value = itemName;
-    document.getElementById("product-search-query").focus();
-  }
-}
-
-async function doProductSearch() {
-  const query = document.getElementById("product-search-query").value.trim();
+async function doStapleSearch() {
+  const query = document.getElementById("staple-search-query").value.trim();
   if (!query) return;
 
-  const resultsDiv = document.getElementById("product-search-results");
+  const resultsDiv = document.getElementById("staple-search-results");
+  resultsDiv.style.display = "block";
   resultsDiv.innerHTML = '<p class="empty-state">Searching...</p>';
-  document.getElementById("btn-product-search-go").disabled = true;
-  showActivity("cart-activity", "cart-activity-status", "Searching Woodmans for \"" + query + "\"...");
+  document.getElementById("btn-staple-search").disabled = true;
 
   try {
     const products = await appApi.searchProducts(query);
 
     if (products.error) {
       resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(products.error)}</p>`;
-      hideActivity("cart-activity", "cart-activity-status", "Search failed: " + products.error, "error");
       return;
     }
 
     if (!products || products.length === 0) {
-      resultsDiv.innerHTML = '<p class="empty-state">No products found. Try a different search term.</p>';
-      hideActivity("cart-activity", "cart-activity-status", "No products found", "error");
+      resultsDiv.innerHTML = '<p class="empty-state">No products found. Try a different search.</p>';
       return;
     }
 
     resultsDiv.innerHTML = products
       .map(
         (p, i) => `
-      <div class="product-result-row" onclick="selectProduct(${i})">
+      <div class="product-result-row" onclick="selectStapleSearchResult(${i})">
         <div class="product-result-name">${esc(p.name)}</div>
         <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
       </div>`
       )
       .join("");
 
-    window._productSearchResults = products;
-    hideActivity("cart-activity", "cart-activity-status", "Found " + products.length + " products", "success");
+    window._stapleSearchResults = products;
   } catch (err) {
     resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(err.message)}</p>`;
-    hideActivity("cart-activity", "cart-activity-status", "Search error: " + err.message, "error");
   } finally {
-    document.getElementById("btn-product-search-go").disabled = false;
+    document.getElementById("btn-staple-search").disabled = false;
   }
 }
 
-function selectProduct(index) {
-  const products = window._productSearchResults;
+async function selectStapleSearchResult(index) {
+  const products = window._stapleSearchResults;
   if (!products || !products[index]) return;
 
   const p = products[index];
-  document.getElementById("staple-product-name").value = p.name;
-  document.getElementById("staple-price").value = p.price || "";
-  // Auto-fill item name with product name if empty
-  const itemNameField = document.getElementById("staple-item");
-  if (!itemNameField.value.trim()) {
-    itemNameField.value = p.name;
-  }
-  document.getElementById("product-search-area").style.display = "none";
+  const staple = {
+    id: generateId(),
+    item: p.name,
+    quantity: 1,
+    note: "",
+    productName: p.name,
+    brand: "",
+    price: p.price || "",
+  };
+
+  staples.push(staple);
+  await appApi.saveStaples(staples);
+  renderStaples();
+  renderCart();
+
+  // Clear search
+  document.getElementById("staple-search-query").value = "";
+  document.getElementById("staple-search-results").style.display = "none";
+  document.getElementById("staple-search-query").focus();
 }
 
 // --- Recipes ---
@@ -636,6 +607,7 @@ async function saveRecipe() {
 
 async function deleteRecipe(id) {
   if (!confirm("Delete this recipe?")) return;
+  appApi.deleteRecipeImage(id);
   recipes = recipes.filter((r) => r.id !== id);
   await appApi.saveRecipes(recipes);
   renderRecipes();
@@ -644,11 +616,24 @@ async function deleteRecipe(id) {
 
 // --- View Recipe ---
 
+let viewingRecipeId = null;
+
 function viewRecipe(id) {
   const recipe = recipes.find((r) => r.id === id);
   if (!recipe) return;
 
+  viewingRecipeId = id;
   document.getElementById("view-recipe-title").textContent = recipe.name;
+
+  const imgEl = document.getElementById("view-recipe-image");
+  if (recipe.imageUrl) {
+    imgEl.src = recipe.imageUrl + "?t=" + Date.now();
+    imgEl.alt = recipe.name;
+    imgEl.style.display = "block";
+  } else {
+    imgEl.style.display = "none";
+    imgEl.src = "";
+  }
 
   const servingsEl = document.getElementById("view-recipe-servings");
   servingsEl.textContent = recipe.servings ? "Serves " + recipe.servings : "";
@@ -684,6 +669,52 @@ function viewRecipe(id) {
 
 function printRecipe() {
   window.print();
+}
+
+function openRecipeExternal() {
+  const recipe = viewingRecipeId ? recipes.find((r) => r.id === viewingRecipeId) : null;
+  if (!recipe) return;
+
+  const items = recipe.items || [];
+  const instructions = recipe.instructions || [];
+
+  let imgTag = "";
+  if (recipe.imageUrl) {
+    // Convert relative URL to absolute for the blob page
+    const absUrl = new URL(recipe.imageUrl, location.origin).href;
+    imgTag = '<img src="' + esc(absUrl) + '" style="width:100%;max-height:400px;object-fit:cover;border-radius:8px;margin-bottom:16px;" alt="' + esc(recipe.name) + '" />';
+  }
+
+  const ingredientsHtml = items.length > 0
+    ? "<ul>" + items.map((item) => {
+        let text = "";
+        if (item.quantity && item.quantity > 1) text += item.quantity + "x ";
+        text += esc(item.item || "");
+        if (item.note) text += " (" + esc(item.note) + ")";
+        return "<li>" + text + "</li>";
+      }).join("") + "</ul>"
+    : "<p>No ingredients</p>";
+
+  const instructionsHtml = instructions.length > 0
+    ? "<ol>" + instructions.map((step) => "<li>" + esc(step) + "</li>").join("") + "</ol>"
+    : "<p>No instructions available</p>";
+
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(recipe.name) + '</title>'
+    + '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6;}'
+    + 'h1{color:#b71c1c;margin-bottom:4px;}p.servings{color:#666;margin-bottom:16px;font-size:15px;}'
+    + 'h2{font-size:18px;margin-top:20px;margin-bottom:8px;border-bottom:2px solid #eee;padding-bottom:4px;}'
+    + 'ul{padding-left:20px;}ol{padding-left:24px;}li{padding:3px 0;}'
+    + 'img{display:block;}</style></head><body>'
+    + imgTag
+    + '<h1>' + esc(recipe.name) + '</h1>'
+    + (recipe.servings ? '<p class="servings">Serves ' + recipe.servings + '</p>' : '')
+    + '<h2>Ingredients</h2>' + ingredientsHtml
+    + '<h2>Instructions</h2>' + instructionsHtml
+    + '</body></html>';
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
 }
 
 // --- AI Recipe Generation ---
@@ -747,6 +778,15 @@ async function generateAiRecipe() {
 
     statusEl.textContent = `Added "${recipe.name}" with ${recipe.items.length} ingredients!`;
     statusEl.className = "ai-status success";
+
+    // Generate recipe image in background (don't block)
+    appApi.generateRecipeImage(recipe.id, recipe.name).then((imgResult) => {
+      if (imgResult && imgResult.imageUrl && !imgResult.error) {
+        recipe.imageUrl = imgResult.imageUrl;
+        appApi.saveRecipes(recipes);
+        renderRecipes();
+      }
+    });
 
     // Close after a brief delay
     setTimeout(() => {
@@ -865,7 +905,6 @@ function renderCart() {
   if (manualSearch && cartRunning) manualSearch.style.display = "none";
   document.getElementById("btn-clear-cart").style.display = cartRunning ? "none" : "inline-flex";
   document.getElementById("btn-add-all-staples").disabled = cartRunning;
-  document.getElementById("btn-add-staple").disabled = cartRunning;
   document.getElementById("btn-add-recipe").disabled = cartRunning;
 }
 
@@ -1339,7 +1378,7 @@ function openExternalUrl(url) {
 window.openExternalUrl = openExternalUrl;
 window.openStapleModal = openStapleModal;
 window.deleteStaple = deleteStaple;
-window.selectProduct = selectProduct;
+window.selectStapleSearchResult = selectStapleSearchResult;
 window.openRecipeModal = openRecipeModal;
 window.deleteRecipe = deleteRecipe;
 window.toggleRecipe = toggleRecipe;
@@ -1353,5 +1392,6 @@ window.selectRecipeItemProduct = selectRecipeItemProduct;
 window.selectManualProduct = selectManualProduct;
 window.viewRecipe = viewRecipe;
 window.printRecipe = printRecipe;
+window.openRecipeExternal = openRecipeExternal;
 window.toggleShoppingMode = toggleShoppingMode;
 window.toggleDarkMode = toggleDarkMode;

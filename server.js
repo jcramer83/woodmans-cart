@@ -4,6 +4,7 @@ const express = require("express");
 const http = require("http");
 const { WebSocketServer } = require("ws");
 const path = require("path");
+const fs = require("fs");
 
 const PORT = 3456;
 
@@ -16,6 +17,7 @@ function startServer(deps) {
   // Serve renderer/ as static files, and assets/ for favicon etc.
   app.use(express.static(path.join(__dirname, "renderer")));
   app.use("/assets", express.static(path.join(__dirname, "assets")));
+  app.use("/data/recipe-images", express.static(path.join(__dirname, "data", "recipe-images")));
 
   const server = http.createServer(app);
 
@@ -53,6 +55,7 @@ function startServer(deps) {
     const safe = Object.assign({}, settings);
     delete safe.password;
     delete safe.anthropicApiKey;
+    delete safe.openaiApiKey;
     res.json(safe);
   });
 
@@ -65,6 +68,9 @@ function startServer(deps) {
     }
     if (!incoming.anthropicApiKey && current.anthropicApiKey) {
       incoming.anthropicApiKey = current.anthropicApiKey;
+    }
+    if (!incoming.openaiApiKey && current.openaiApiKey) {
+      incoming.openaiApiKey = current.openaiApiKey;
     }
     writeJSON(SETTINGS_PATH, incoming);
     res.json({ ok: true });
@@ -280,6 +286,98 @@ function startServer(deps) {
     } catch (err) {
       res.json({ error: err.message });
     }
+  });
+
+  // Recipe image generation (OpenAI)
+  app.post("/api/recipe/image", async function (req, res) {
+    const { recipeId, recipeName } = req.body;
+    if (!recipeId || !recipeName) {
+      return res.json({ error: "Missing recipeId or recipeName" });
+    }
+
+    const currentSettings = readJSON(SETTINGS_PATH) || {};
+    const apiKey = currentSettings.openaiApiKey;
+    if (!apiKey) {
+      return res.json({ error: "No OpenAI API key configured" });
+    }
+
+    const httpsModule = require("https");
+    const imgDir = path.join(__dirname, "data", "recipe-images");
+    fs.mkdirSync(imgDir, { recursive: true });
+
+    const prompt = "A beautiful, appetizing food photograph of: " + recipeName + ". Professional food photography, well-lit, on a clean plate, top-down angle.";
+
+    const body = JSON.stringify({
+      model: "gpt-image-1",
+      prompt: prompt,
+      n: 1,
+      size: "1024x1024",
+      quality: "low",
+    });
+
+    try {
+      const result = await new Promise(function (resolve, reject) {
+        const reqObj = httpsModule.request(
+          {
+            hostname: "api.openai.com",
+            path: "/v1/images/generations",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + apiKey,
+            },
+          },
+          function (apiRes) {
+            let data = "";
+            apiRes.on("data", function (chunk) { data += chunk; });
+            apiRes.on("end", function () {
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.error) {
+                  reject(new Error(parsed.error.message || "OpenAI API error"));
+                  return;
+                }
+                resolve(parsed);
+              } catch (e) {
+                reject(new Error("Failed to parse OpenAI response"));
+              }
+            });
+          }
+        );
+        reqObj.on("error", reject);
+        reqObj.write(body);
+        reqObj.end();
+      });
+
+      const b64 = result.data && result.data[0] && result.data[0].b64_json;
+      if (!b64) {
+        return res.json({ error: "No image data in response" });
+      }
+
+      const imgPath = path.join(imgDir, recipeId + ".png");
+      fs.writeFileSync(imgPath, Buffer.from(b64, "base64"));
+
+      const imageUrl = "/data/recipe-images/" + recipeId + ".png";
+      res.json({ ok: true, imageUrl: imageUrl });
+    } catch (err) {
+      res.json({ error: err.message });
+    }
+  });
+
+  // Delete recipe image
+  app.post("/api/recipe/image/delete", function (req, res) {
+    const { recipeId } = req.body;
+    if (!recipeId) return res.json({ ok: true });
+
+    const imgPath = path.join(__dirname, "data", "recipe-images", recipeId + ".png");
+    try {
+      if (fs.existsSync(imgPath)) {
+        fs.unlinkSync(imgPath);
+      }
+    } catch (e) {
+      // ignore cleanup errors
+    }
+    res.json({ ok: true });
   });
 
   // Collect local network addresses

@@ -1,6 +1,7 @@
 node_modules/
 package-lock.json
 data/settings.json
+data/recipe-images/
 *.tar.gz
 *.lnk
 .claude/

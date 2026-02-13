@@ -79,6 +79,10 @@
     // AI recipe generation
     generateRecipe: function (data) { return apiPost("/api/recipe/generate", data); },
 
+    // Recipe image generation
+    generateRecipeImage: function (id, name) { return apiPost("/api/recipe/image", { recipeId: id, recipeName: name }); },
+    deleteRecipeImage: function (id) { return apiPost("/api/recipe/image/delete", { recipeId: id }); },
+
     // Fetch current online cart
     fetchCurrentCart: function () { return apiPost("/api/cart/fetch"); },
 

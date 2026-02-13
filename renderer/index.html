@@ -41,12 +41,16 @@
           <h2>Weekly Staples</h2>
           <div class="section-actions">
             <button id="btn-add-all-staples" class="btn btn-sm">Add All to Cart</button>
-            <button id="btn-add-staple" class="btn btn-sm btn-accent">+ Add</button>
           </div>
         </div>
         <div id="staples-list" class="item-list">
-          <p class="empty-state">No staples yet. Click "+ Add" to get started.</p>
+          <p class="empty-state">No staples yet. Search below to add items.</p>
         </div>
+        <div class="staple-search-row">
+          <input type="text" id="staple-search-query" placeholder="Search Woodmans to add..." />
+          <button id="btn-staple-search" class="btn btn-sm btn-accent">Search</button>
+        </div>
+        <div id="staple-search-results" class="product-results" style="display:none;"></div>
       </section>
 
       <!-- Recipes section -->
@@ -135,43 +139,19 @@
   <div id="modal-staple" class="modal-overlay" style="display:none;">
     <div class="modal">
       <div class="modal-header">
-        <h3 id="staple-modal-title">Add Staple</h3>
+        <h3 id="staple-modal-title">Edit Staple</h3>
         <button class="btn-close" data-close="modal-staple">&times;</button>
       </div>
       <div class="modal-body">
-        <label>
-          Item Name
-          <input type="text" id="staple-item" placeholder="e.g. whole milk" />
-        </label>
+        <div id="staple-edit-product" class="staple-edit-product"></div>
         <label>
           Quantity
           <input type="number" id="staple-quantity" value="1" min="1" max="99" />
         </label>
         <label>
           Note
-          <input type="text" id="staple-note" placeholder="e.g. half gallon" />
+          <input type="text" id="staple-note" placeholder="e.g. half gallon, for tacos, etc." />
         </label>
-        <div class="product-search-section">
-          <label>Product / Brand</label>
-          <div class="product-search-row">
-            <input type="text" id="staple-product-name" placeholder="Selected product name" readonly />
-            <button id="btn-find-product" class="btn btn-sm">Find Product</button>
-          </div>
-          <div id="product-search-area" style="display:none;">
-            <div class="product-search-input-row">
-              <input type="text" id="product-search-query" placeholder="Search Woodmans..." />
-              <button id="btn-product-search-go" class="btn btn-sm">Search</button>
-            </div>
-            <div id="product-search-results" class="product-results">
-              <p class="empty-state">Enter a search term and click Search.</p>
-            </div>
-          </div>
-        </div>
-        <label>
-          Brand
-          <input type="text" id="staple-brand" placeholder="e.g. Organic Valley" />
-        </label>
-        <input type="hidden" id="staple-price" value="" />
       </div>
       <div class="modal-footer">
         <button class="btn" data-close="modal-staple">Cancel</button>
@@ -291,6 +271,7 @@
         <button class="btn-close" data-close="modal-view-recipe">&times;</button>
       </div>
       <div class="modal-body" id="view-recipe-body">
+        <img id="view-recipe-image" class="recipe-view-image" style="display:none" />
         <p id="view-recipe-servings" class="recipe-view-servings"></p>
         <h4>Ingredients</h4>
         <ul id="view-recipe-ingredients" class="recipe-view-ingredients"></ul>
@@ -299,6 +280,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn" onclick="printRecipe()">Print</button>
+        <button class="btn" onclick="openRecipeExternal()">Open in Browser</button>
         <button class="btn btn-accent" data-close="modal-view-recipe">Close</button>
       </div>
     </div>
