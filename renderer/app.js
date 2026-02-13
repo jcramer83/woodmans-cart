@@ -11,6 +11,50 @@ let cartRunning = false;
 let removeProgressListener = null;
 let cartItemResults = {}; // { itemId: "ok"|"fail"|"skip" } — tracks per-item status during automation
 
+// --- Modal helpers ---
+
+function showModal(id) {
+  const overlay = document.getElementById(id);
+  if (!overlay) return;
+  const modal = overlay.querySelector(".modal");
+  if (modal) { modal.style.position = ""; modal.style.left = ""; modal.style.top = ""; }
+  requestAnimationFrame(() => overlay.classList.add("visible"));
+}
+
+function hideModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove("visible");
+}
+
+function isModalOpen(id) {
+  const el = document.getElementById(id);
+  return el && el.classList.contains("visible");
+}
+
+// --- Toast notifications ---
+
+function showToast(message, type) {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = "toast" + (type ? " " + type : "");
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// --- Loading skeleton ---
+
+function skeletonHTML(count) {
+  return Array(count || 3).fill(
+    '<div class="skeleton-row"><div class="skeleton-thumb"></div><div class="skeleton-lines"><div class="skeleton-line"></div><div class="skeleton-line"></div></div></div>'
+  ).join("");
+}
+
 // --- Activity bar helpers ---
 
 function showActivity(barId, statusId, message) {
@@ -130,8 +174,7 @@ function bindEvents() {
   // Modal close buttons
   document.querySelectorAll("[data-close]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const modalId = btn.getAttribute("data-close");
-      document.getElementById(modalId).style.display = "none";
+      hideModal(btn.getAttribute("data-close"));
     });
   });
 
@@ -149,7 +192,6 @@ function bindEvents() {
       const rect = modal.getBoundingClientRect();
       offsetX = e.clientX - rect.left;
       offsetY = e.clientY - rect.top;
-      // Switch to fixed positioning on first drag
       if (!modal.style.left) {
         modal.style.position = "fixed";
         modal.style.left = rect.left + "px";
@@ -170,25 +212,28 @@ function bindEvents() {
     });
   });
 
-  // Reset modal position when opened so it starts centered
-  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
-    const observer = new MutationObserver(() => {
-      if (overlay.style.display === "flex") {
-        const modal = overlay.querySelector(".modal");
-        if (modal) {
-          modal.style.position = "";
-          modal.style.left = "";
-          modal.style.top = "";
-        }
-      }
-    });
-    observer.observe(overlay, { attributes: true, attributeFilter: ["style"] });
-  });
-
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      document.querySelectorAll(".modal-overlay").forEach((m) => (m.style.display = "none"));
+      document.querySelectorAll(".modal-overlay").forEach((m) => m.classList.remove("visible"));
+    }
+  });
+
+  // Debounced auto-search for staples
+  let stapleSearchTimer = null;
+  document.getElementById("staple-search-query").addEventListener("input", (e) => {
+    clearTimeout(stapleSearchTimer);
+    if (e.target.value.trim().length >= 3) {
+      stapleSearchTimer = setTimeout(doStapleSearch, 400);
+    }
+  });
+
+  // Debounced auto-search for manual cart add
+  let manualSearchTimer = null;
+  document.getElementById("manual-search-query").addEventListener("input", (e) => {
+    clearTimeout(manualSearchTimer);
+    if (e.target.value.trim().length >= 3) {
+      manualSearchTimer = setTimeout(doManualSearch, 400);
     }
   });
 
@@ -264,7 +309,7 @@ function openStapleModal(id) {
   document.getElementById("staple-quantity").value = staple.quantity || 1;
   document.getElementById("staple-note").value = staple.note || "";
 
-  document.getElementById("modal-staple").style.display = "flex";
+  showModal("modal-staple");
   document.getElementById("staple-quantity").focus();
 }
 
@@ -279,7 +324,8 @@ async function saveStaple() {
   await appApi.saveStaples(staples);
   renderStaples();
   renderCart();
-  document.getElementById("modal-staple").style.display = "none";
+  hideModal("modal-staple");
+  showToast("Staple updated", "success");
 }
 
 async function deleteStaple(id) {
@@ -288,6 +334,7 @@ async function deleteStaple(id) {
   await appApi.saveStaples(staples);
   renderStaples();
   renderCart();
+  showToast("Staple removed");
 }
 
 function addAllStaplesToCart() {
@@ -296,6 +343,7 @@ function addAllStaplesToCart() {
     excludedCartIds.delete("staple-" + s.id);
   }
   renderCart();
+  if (staples.length > 0) showToast("Added " + staples.length + " staples to cart", "success");
 }
 
 // --- Staple search (inline) ---
@@ -306,7 +354,7 @@ async function doStapleSearch() {
 
   const resultsDiv = document.getElementById("staple-search-results");
   resultsDiv.style.display = "block";
-  resultsDiv.innerHTML = '<p class="empty-state">Searching...</p>';
+  resultsDiv.innerHTML = skeletonHTML(3);
   document.getElementById("btn-staple-search").disabled = true;
 
   try {
@@ -363,6 +411,7 @@ async function selectStapleSearchResult(index) {
   excludedCartIds.add("staple-" + staple.id);
   await appApi.saveStaples(staples);
   renderStaples();
+  showToast("Added " + p.name, "success");
 
   // Clear search
   document.getElementById("staple-search-query").value = "";
@@ -387,6 +436,7 @@ function renderRecipes() {
         <input type="checkbox" ${r.enabled ? "checked" : ""} onchange="toggleRecipe('${r.id}', this.checked)" />
         <span class="toggle-slider"></span>
       </label>
+      ${r.imageUrl ? `<img class="item-thumb" src="${esc(r.imageUrl)}" alt="">` : ""}
       <div class="item-info">
         <div class="item-name">${esc(r.name)}</div>
         <div class="item-detail">${(r.items || []).length} item${(r.items || []).length !== 1 ? "s" : ""}</div>
@@ -426,7 +476,7 @@ function openRecipeModal(id) {
   recipeItemsDraft = recipe ? JSON.parse(JSON.stringify(recipe.items || [])) : [];
   renderRecipeItems();
 
-  document.getElementById("modal-recipe").style.display = "flex";
+  showModal("modal-recipe");
   document.getElementById("recipe-name").focus();
 }
 
@@ -477,7 +527,7 @@ function openRecipeItemModal(index) {
 
   window._recipeItemSelectedPrice = item ? item.price || "" : "";
   window._recipeItemSelectedImage = item ? item.image || "" : "";
-  document.getElementById("modal-recipe-item").style.display = "flex";
+  showModal("modal-recipe-item");
   document.getElementById("recipe-item-name").focus();
 }
 
@@ -502,7 +552,7 @@ function saveRecipeItem() {
   }
 
   renderRecipeItems();
-  document.getElementById("modal-recipe-item").style.display = "none";
+  hideModal("modal-recipe-item");
 }
 
 function toggleRecipeItemSearch() {
@@ -520,7 +570,7 @@ async function doRecipeItemSearch() {
   if (!query) return;
 
   const resultsDiv = document.getElementById("recipe-item-search-results");
-  resultsDiv.innerHTML = '<p class="empty-state">Searching...</p>';
+  resultsDiv.innerHTML = skeletonHTML(3);
   document.getElementById("btn-recipe-item-search-go").disabled = true;
   showActivity("cart-activity", "cart-activity-status", "Searching Woodmans for \"" + query + "\"...");
 
@@ -613,7 +663,8 @@ async function saveRecipe() {
   await appApi.saveRecipes(recipes);
   renderRecipes();
   renderCart();
-  document.getElementById("modal-recipe").style.display = "none";
+  hideModal("modal-recipe");
+  showToast("Recipe saved", "success");
 }
 
 async function deleteRecipe(id) {
@@ -623,6 +674,7 @@ async function deleteRecipe(id) {
   await appApi.saveRecipes(recipes);
   renderRecipes();
   renderCart();
+  showToast("Recipe deleted");
 }
 
 // --- View Recipe ---
@@ -677,7 +729,7 @@ function viewRecipe(id) {
     instructionsList.innerHTML = '<li class="empty-state">No instructions available</li>';
   }
 
-  document.getElementById("modal-view-recipe").style.display = "flex";
+  showModal("modal-view-recipe");
 }
 
 function printRecipe() {
@@ -740,7 +792,7 @@ function openAiRecipeModal() {
   document.getElementById("btn-ai-generate").disabled = true;
   document.getElementById("ai-suggestions").style.display = "none";
   document.getElementById("ai-suggestions-list").innerHTML = "";
-  document.getElementById("modal-ai-recipe").style.display = "flex";
+  showModal("modal-ai-recipe");
   document.getElementById("ai-recipe-prompt").focus();
 }
 
@@ -915,7 +967,7 @@ async function generateAiRecipe() {
     statusEl.className = "ai-status success";
 
     // Close AI modal and open the view recipe modal
-    document.getElementById("modal-ai-recipe").style.display = "none";
+    hideModal("modal-ai-recipe");
     viewRecipe(recipe.id);
 
     // Look up product matches for each ingredient, then generate recipe image
@@ -924,7 +976,7 @@ async function generateAiRecipe() {
       renderRecipes();
       renderCart();
       // Update view modal if still open
-      if (document.getElementById("modal-view-recipe").style.display === "flex" && viewingRecipeId === recipe.id) {
+      if (isModalOpen("modal-view-recipe") && viewingRecipeId === recipe.id) {
         viewRecipe(recipe.id);
       }
       // Generate recipe image after product matching is done (avoids save race)
@@ -934,7 +986,7 @@ async function generateAiRecipe() {
         await appApi.saveRecipes(recipes);
         renderRecipes();
         var imgEl = document.getElementById("view-recipe-image");
-        if (imgEl && document.getElementById("modal-view-recipe").style.display === "flex") {
+        if (imgEl && isModalOpen("modal-view-recipe")) {
           imgEl.src = imgResult.imageUrl + "?t=" + Date.now();
           imgEl.alt = recipe.name;
           imgEl.style.display = "block";
@@ -1149,7 +1201,7 @@ async function doManualSearch() {
 
   const resultsDiv = document.getElementById("manual-search-results");
   resultsDiv.style.display = "block";
-  resultsDiv.innerHTML = '<p class="empty-state">Searching...</p>';
+  resultsDiv.innerHTML = skeletonHTML(3);
   document.getElementById("btn-manual-search-go").disabled = true;
 
   try {
@@ -1200,6 +1252,7 @@ function selectManualProduct(index) {
   });
 
   renderCart();
+  showToast("Added " + p.name + " to cart", "success");
 
   // Clear search
   document.getElementById("manual-search-query").value = "";
@@ -1268,8 +1321,8 @@ async function fetchOnlineCart() {
   document.getElementById("online-cart-list").innerHTML = "";
   showActivity("online-cart-activity", "online-cart-activity-status", "Fetching your Woodmans cart... (30-60s)");
 
-  const logEl = document.getElementById("progress-log");
-  logEl.innerHTML = "";
+  const statusLine = document.getElementById("cart-status-line");
+  if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
 
   // Listen for progress messages from the cart fetch
   if (removeProgressListener) removeProgressListener();
@@ -1310,8 +1363,8 @@ async function removeAllOnlineCartItems() {
   refreshBtn.disabled = true;
   showActivity("online-cart-activity", "online-cart-activity-status", "Removing all items from Woodmans cart...");
 
-  const logEl = document.getElementById("progress-log");
-  logEl.innerHTML = "";
+  const statusLine = document.getElementById("cart-status-line");
+  if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
 
   // Set up progress listener for removal updates
   if (removeProgressListener) removeProgressListener();
@@ -1357,8 +1410,8 @@ async function startCartAutomation() {
   document.getElementById("btn-stop-cart").style.display = "inline-flex";
   renderCart();
 
-  const logEl = document.getElementById("progress-log");
-  logEl.innerHTML = "";
+  const statusLine = document.getElementById("cart-status-line");
+  if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
 
   // Set up progress listener
   if (removeProgressListener) removeProgressListener();
@@ -1400,19 +1453,20 @@ async function startCartAutomation() {
   removeItemDoneListener();
   progressBar.style.display = "none";
 
-  // Summary in activity status (no sliding bar — the progress bar already covered that)
+  // Summary
   const okCount = Object.values(cartItemResults).filter((s) => s === "ok").length;
   const failCount = Object.values(cartItemResults).filter((s) => s === "fail").length;
   const skipCount = Object.values(cartItemResults).filter((s) => s === "skip").length;
-  const statusEl = document.getElementById("cart-activity-status");
-  if (statusEl) {
+  const summaryLine = document.getElementById("cart-status-line");
+  if (summaryLine) {
     if (failCount > 0) {
-      statusEl.textContent = "Done — " + okCount + " added, " + failCount + " FAILED, " + skipCount + " skipped";
-      statusEl.className = "activity-status active error";
+      summaryLine.textContent = "Done — " + okCount + " added, " + failCount + " failed, " + skipCount + " skipped";
+      summaryLine.className = "cart-status-line error";
+      showToast(failCount + " items failed to add", "error");
     } else {
-      statusEl.textContent = "Done — " + okCount + " added" + (skipCount > 0 ? ", " + skipCount + " skipped" : "");
-      statusEl.className = "activity-status active success";
-      setTimeout(function () { statusEl.className = "activity-status"; statusEl.textContent = ""; }, 5000);
+      summaryLine.textContent = "Done — " + okCount + " added" + (skipCount > 0 ? ", " + skipCount + " skipped" : "");
+      summaryLine.className = "cart-status-line success";
+      showToast("All " + okCount + " items added!", "success");
     }
   }
 
@@ -1494,12 +1548,11 @@ function cleanLogMessage(msg) {
 function appendLog(message) {
   const cleaned = cleanLogMessage(message);
   if (!cleaned) return;
-  const logEl = document.getElementById("progress-log");
-  const line = document.createElement("p");
-  line.className = "log-line";
-  line.textContent = cleaned;
-  logEl.appendChild(line);
-  logEl.scrollTop = logEl.scrollHeight;
+  const statusLine = document.getElementById("cart-status-line");
+  if (statusLine) {
+    statusLine.textContent = cleaned;
+    statusLine.className = "cart-status-line active";
+  }
 }
 
 // --- Helpers ---

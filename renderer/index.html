@@ -96,9 +96,7 @@
         </div>
         <div id="cart-activity" class="activity-bar"><div class="activity-bar-fill"></div></div>
         <div id="cart-activity-status" class="activity-status"></div>
-        <div id="progress-log" class="progress-log">
-          <p class="empty-state">Progress will appear here...</p>
-        </div>
+        <div id="cart-status-line" class="cart-status-line"></div>
       </section>
 
       <!-- Current Woodmans Online Cart section -->
@@ -121,7 +119,7 @@
   </main>
 
   <!-- Staple Edit Modal -->
-  <div id="modal-staple" class="modal-overlay" style="display:none;">
+  <div id="modal-staple" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
         <h3 id="staple-modal-title">Edit Staple</h3>
@@ -146,7 +144,7 @@
   </div>
 
   <!-- Recipe Edit Modal -->
-  <div id="modal-recipe" class="modal-overlay" style="display:none;">
+  <div id="modal-recipe" class="modal-overlay">
     <div class="modal modal-wide">
       <div class="modal-header">
         <h3 id="recipe-modal-title">Add Recipe</h3>
@@ -175,7 +173,7 @@
   </div>
 
   <!-- Recipe Item Edit Modal (for individual ingredients) -->
-  <div id="modal-recipe-item" class="modal-overlay" style="display:none;">
+  <div id="modal-recipe-item" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
         <h3 id="recipe-item-modal-title">Add Ingredient</h3>
@@ -219,7 +217,7 @@
   </div>
 
   <!-- AI Recipe Modal -->
-  <div id="modal-ai-recipe" class="modal-overlay" style="display:none;">
+  <div id="modal-ai-recipe" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
         <h3>AI Recipe</h3>
@@ -258,7 +256,7 @@
   </div>
 
   <!-- View Recipe Modal -->
-  <div id="modal-view-recipe" class="modal-overlay" style="display:none;">
+  <div id="modal-view-recipe" class="modal-overlay">
     <div class="modal modal-wide">
       <div class="modal-header">
         <h3 id="view-recipe-title">Recipe</h3>
@@ -280,6 +278,7 @@
     </div>
   </div>
 
+  <div id="toast-container" class="toast-container"></div>
   <script src="api-adapter.js"></script>
   <script src="app.js"></script>
 </body>
