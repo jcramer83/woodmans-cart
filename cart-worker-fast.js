@@ -341,7 +341,7 @@ function parseItemDetails(itemsArray) {
       if (m) price = m[0];
     }
     const imgObj = item.viewSection?.itemImage;
-    const image = imgObj?.templateUrl?.replace("{width=}", "96").replace("{height=}", "96") || imgObj?.url || "";
+    const image = imgObj?.url || "";
     map[item.id] = { name: item.name || "", price, size: item.size || "", image };
   }
   return map;
