@@ -28,16 +28,8 @@
     </div>
     <div style="display:flex;align-items:center;gap:6px;-webkit-app-region:no-drag;">
       <button id="btn-dark-mode" class="btn-icon" onclick="toggleDarkMode()" title="Toggle dark mode">&#9790;</button>
-      <button id="btn-settings" class="btn-icon" title="Settings">&#9881;</button>
     </div>
   </header>
-
-  <!-- Server status bar (desktop only) -->
-  <div id="server-bar" class="server-bar" style="display:none;">
-    <span class="server-dot"></span>
-    <span>Web access: </span>
-    <a id="server-url" class="server-link" href="#" target="_blank"></a>
-  </div>
 
   <!-- Main layout -->
   <main class="main-grid">
@@ -138,59 +130,6 @@
       </section>
     </div>
   </main>
-
-  <!-- Settings Modal -->
-  <div id="modal-settings" class="modal-overlay" style="display:none;">
-    <div class="modal">
-      <div class="modal-header">
-        <h3>Settings</h3>
-        <button class="btn-close" data-close="modal-settings">&times;</button>
-      </div>
-      <div class="modal-body">
-        <label>
-          Email / Username
-          <input type="text" id="setting-username" autocomplete="off" />
-        </label>
-        <label>
-          Password
-          <input type="password" id="setting-password" autocomplete="off" />
-        </label>
-        <label>
-          ZIP Code
-          <input type="text" id="setting-zip" value="53177" maxlength="5" />
-        </label>
-        <label>
-          Shopping Mode
-          <select id="setting-shopping-mode">
-            <option value="instore">In-Store</option>
-            <option value="pickup">Pickup</option>
-          </select>
-        </label>
-        <label>
-          Store URL
-          <input type="text" id="setting-store-url" value="https://shopwoodmans.com" />
-        </label>
-        <label>
-          Delay Between Items (ms)
-          <input type="number" id="setting-delay" value="2000" min="500" max="15000" />
-        </label>
-        <hr style="margin: 12px 0; border: none; border-top: 1px solid #eee;" />
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="setting-show-log" style="width:auto;margin:0;" />
-          Show detailed progress log
-        </label>
-        <hr style="margin: 12px 0; border: none; border-top: 1px solid #eee;" />
-        <label>
-          Claude API Key <span style="font-weight:normal;color:#888;">(for AI recipe generation)</span>
-          <input type="password" id="setting-api-key" autocomplete="off" placeholder="sk-ant-..." />
-        </label>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" data-close="modal-settings">Cancel</button>
-        <button id="btn-save-settings" class="btn btn-accent">Save</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Staple Edit Modal -->
   <div id="modal-staple" class="modal-overlay" style="display:none;">

@@ -573,8 +573,10 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
 
   // Phase 4: Build cart state from the last add response
   let cartItems = [];
-  if (lastAddResponse?.body?.data?.updateCartItems?.cart?.cartItemCollection?.cartItems) {
-    const rawCartItems = lastAddResponse.body.data.updateCartItems.cart.cartItemCollection.cartItems;
+  const lastCart = lastAddResponse?.body?.data?.updateCartItems?.cart;
+  const lastRawItems = lastCart?.cartItemCollection?.cartItems || lastCart?.items || lastCart?.cartItems;
+  if (lastRawItems) {
+    const rawCartItems = lastRawItems;
     const cartItemIds = rawCartItems.map((ci) => ci.itemId).filter(Boolean);
 
     if (cartItemIds.length > 0) {
@@ -632,8 +634,15 @@ async function fetchCartViaGraphQL(session, progressCallback) {
     throw new Error("GraphQL error: " + (res.body.errors[0]?.message || "unknown"));
   }
 
-  const rawCartItems = res.body?.data?.updateCartItems?.cart?.cartItemCollection?.cartItems;
+  // Try known response paths — Instacart may restructure these
+  const cart = res.body?.data?.updateCartItems?.cart;
+  const rawCartItems = cart?.cartItemCollection?.cartItems
+    || cart?.items
+    || cart?.cartItems;
   if (!rawCartItems || !Array.isArray(rawCartItems)) {
+    // Dump enough of the response shape to diagnose remotely
+    const snippet = JSON.stringify(res.body, null, 2)?.substring(0, 800) || "(empty)";
+    progress(`Debug: status=${res.status}, response:\n${snippet}`);
     throw new Error("Unexpected response structure — no cartItems found");
   }
 
@@ -699,7 +708,10 @@ async function removeAllCartItemsViaGraphQL(session, progressCallback) {
     throw new Error("GraphQL error: " + (fetchRes.body.errors[0]?.message || "unknown"));
   }
 
-  const rawCartItems = fetchRes.body?.data?.updateCartItems?.cart?.cartItemCollection?.cartItems;
+  const fetchCart = fetchRes.body?.data?.updateCartItems?.cart;
+  const rawCartItems = fetchCart?.cartItemCollection?.cartItems
+    || fetchCart?.items
+    || fetchCart?.cartItems;
   if (!rawCartItems || rawCartItems.length === 0) {
     progress("Cart is already empty.");
     return { removed: 0 };
@@ -733,7 +745,8 @@ async function removeAllCartItemsViaGraphQL(session, progressCallback) {
   }
 
   // Step 3: Verify — check if any items remain
-  const remaining = removeRes.body?.data?.updateCartItems?.cart?.cartItemCollection?.cartItems || [];
+  const removeCart = removeRes.body?.data?.updateCartItems?.cart;
+  const remaining = removeCart?.cartItemCollection?.cartItems || removeCart?.items || removeCart?.cartItems || [];
 
   if (remaining.length > 0) {
     // Fallback: remove stragglers one by one

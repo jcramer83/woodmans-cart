@@ -85,9 +85,6 @@
     // Remove all items from online cart
     removeAllCartItems: function () { return apiPost("/api/cart/remove-all"); },
 
-    // Server info (not needed in web — already on the web)
-    serverInfo: function () { return Promise.resolve(null); },
-
     // Open URL in new tab (web browser)
     openExternal: function (url) { window.open(url, "_blank"); return Promise.resolve(); },
 

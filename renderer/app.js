@@ -45,12 +45,6 @@ function hideActivity(barId, statusId, message, type) {
   }
 }
 
-function updateProgressLogVisibility() {
-  const show = settings.showProgressLog !== false;
-  const logs = document.querySelectorAll(".progress-log");
-  logs.forEach((el) => { el.style.display = show ? "" : "none"; });
-}
-
 // --- Init ---
 
 document.addEventListener("DOMContentLoaded", init);
@@ -70,7 +64,6 @@ async function init() {
   renderRecipes();
   renderCart();
   updateModeBadge();
-  updateProgressLogVisibility();
   bindEvents();
 
   // Listen for online cart updates pushed after automation completes
@@ -78,32 +71,11 @@ async function init() {
     renderOnlineCart(items);
   });
 
-  // Show server status bar (desktop Electron only)
-  try {
-    const info = await appApi.serverInfo();
-    if (info && info.addresses && info.addresses.length > 0) {
-      const bar = document.getElementById("server-bar");
-      const link = document.getElementById("server-url");
-      if (bar && link) {
-        const url = info.addresses[0];
-        link.href = "#";
-        link.textContent = url;
-        link.onclick = function (e) { e.preventDefault(); openExternalUrl(url); };
-        bar.style.display = "flex";
-      }
-    }
-  } catch (e) {
-    // Not available — web client or server not running
-  }
 }
 
 // --- Event binding ---
 
 function bindEvents() {
-  // Settings
-  document.getElementById("btn-settings").addEventListener("click", openSettingsModal);
-  document.getElementById("btn-save-settings").addEventListener("click", saveSettings);
-
   // Staples
   document.getElementById("btn-add-staple").addEventListener("click", () => openStapleModal(null));
   document.getElementById("btn-add-all-staples").addEventListener("click", addAllStaplesToCart);
@@ -229,38 +201,6 @@ function bindEvents() {
 }
 
 // --- Settings ---
-
-function openSettingsModal() {
-  document.getElementById("setting-username").value = settings.username || "";
-  document.getElementById("setting-password").value = settings.password || "";
-  document.getElementById("setting-zip").value = settings.zipCode || "53177";
-  document.getElementById("setting-shopping-mode").value = settings.shoppingMode || "instore";
-  document.getElementById("setting-store-url").value = settings.storeUrl || "https://shopwoodmans.com";
-  document.getElementById("setting-delay").value = settings.delayBetweenItems || 3000;
-  document.getElementById("setting-api-key").value = settings.anthropicApiKey || "";
-  document.getElementById("setting-show-log").checked = settings.showProgressLog !== false;
-  document.getElementById("modal-settings").style.display = "flex";
-}
-
-async function saveSettings() {
-  const oldMode = settings.shoppingMode || "instore";
-  settings.username = document.getElementById("setting-username").value.trim();
-  settings.password = document.getElementById("setting-password").value;
-  settings.zipCode = document.getElementById("setting-zip").value.trim() || "53177";
-  settings.shoppingMode = document.getElementById("setting-shopping-mode").value || "instore";
-  settings.storeUrl = document.getElementById("setting-store-url").value.trim() || "https://shopwoodmans.com";
-  settings.delayBetweenItems = parseInt(document.getElementById("setting-delay").value) || 3000;
-  settings.anthropicApiKey = document.getElementById("setting-api-key").value.trim();
-  settings.showProgressLog = document.getElementById("setting-show-log").checked;
-  await appApi.saveSettings(settings);
-  updateModeBadge();
-  updateProgressLogVisibility();
-  // If mode changed, clear stale online cart display
-  if (settings.shoppingMode !== oldMode) {
-    renderOnlineCart([]);
-  }
-  document.getElementById("modal-settings").style.display = "none";
-}
 
 function updateModeBadge() {
   const mode = settings.shoppingMode || "instore";
