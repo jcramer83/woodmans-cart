@@ -162,17 +162,22 @@ function startServer(deps) {
         var skipped = fastResult.results.filter(function (r) { return r.status === "skip"; }).length;
         sendProgress("Done! Added: " + ok + ", Failed: " + failed + ", Skipped: " + skipped);
 
-        // Refresh the online cart after adding items
+        // Refresh the online cart after adding items — use cart items from the add response first
         if (ok > 0) {
-          try {
-            sendProgress("Fetching updated Woodmans cart...");
-            var cartItems = await fastWorker.fetchCart(session, sendProgress);
-            if (cartItems && Array.isArray(cartItems) && cartItems.length > 0) {
-              sendOnlineUpdate(cartItems);
-              sendProgress("Online cart updated (" + cartItems.length + " items).");
+          if (fastResult.cartItems && fastResult.cartItems.length > 0) {
+            sendOnlineUpdate(fastResult.cartItems);
+            sendProgress("Online cart updated (" + fastResult.cartItems.length + " items).");
+          } else {
+            try {
+              sendProgress("Fetching updated Woodmans cart...");
+              var cartItems = await fastWorker.fetchCart(session, sendProgress);
+              if (cartItems && Array.isArray(cartItems) && cartItems.length > 0) {
+                sendOnlineUpdate(cartItems);
+                sendProgress("Online cart updated (" + cartItems.length + " items).");
+              }
+            } catch (fetchErr) {
+              sendProgress("Could not fetch online cart: " + fetchErr.message);
             }
-          } catch (fetchErr) {
-            sendProgress("Could not fetch online cart: " + fetchErr.message);
           }
         }
 

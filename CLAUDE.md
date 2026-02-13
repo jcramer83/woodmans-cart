@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Woodmans Cart automates adding grocery items to a ShopWoodmans.com cart using Playwright. It has a GUI for managing weekly staple items, recipes with ingredients, AI recipe generation (Claude API), and one-click cart automation. Runs as either an Electron desktop app or a standalone Express web server (for Docker/Unraid deployment).
+Woodmans Cart automates adding grocery items to a ShopWoodmans.com cart. It has a GUI for managing weekly staple items, recipes with ingredients, AI recipe generation (Claude API), and one-click cart automation. Runs as either an Electron desktop app or a standalone Express web server (for Docker/Unraid deployment).
 
 ## Commands
 
@@ -38,7 +38,7 @@ Both call `startServer()` from `server.js` with a deps object containing `readJS
 ### Two Automation Modes
 
 - **Standard mode (`cart-worker.js`)**: Full Playwright browser automation. Slower (~3-5s/item) but resilient to API changes.
-- **Fast mode (`cart-worker-fast.js`)**: Direct GraphQL API calls using cached session cookies from a one-time headless login. ~10x faster. Uses hard-coded SHA256 persisted query hashes.
+- **Fast mode (`cart-worker-fast.js`)**: Direct GraphQL API calls. Login uses pure HTTP against Azure AD B2C OAuth2 (no browser needed). ~10x faster. Uses hard-coded SHA256 persisted query hashes. Playwright is an optional dependency — only needed for `fetchCart`/`removeAllCartItems` browser scraping (gracefully degrades without it).
 
 Toggled by `settings.fastMode`. Both `main.js` and `server.js` check this flag and route to the appropriate worker.
 
@@ -58,7 +58,9 @@ Three JSON files — `settings.json` (credentials, store URL, delays, fastMode f
 
 ## Docker Deployment
 
-`Dockerfile` uses `mcr.microsoft.com/playwright:v1.50.0-noble` base image, installs production deps only (`--omit=dev` skips Electron), runs `node server-standalone.js`. Credentials are passed as environment variables, data persisted via volume mount to `/app/data`.
+`Dockerfile` uses `node:20-slim` base image (~200MB vs ~2GB Playwright image). Fast mode login is pure HTTP so no browser is needed. Installs production deps only (`--omit=dev` skips Electron and Playwright), runs `node server-standalone.js`. Credentials are passed as environment variables, data persisted via volume mount to `/app/data`.
+
+GitHub Actions (`.github/workflows/docker.yml`) automatically builds and pushes to `ghcr.io/jcramer83/woodmans-cart` on every push to `master`, tagged with `latest` + short git SHA.
 
 ## IPC Channel Map
 

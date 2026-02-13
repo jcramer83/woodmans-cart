@@ -1,9 +1,9 @@
-FROM mcr.microsoft.com/playwright:v1.50.0-noble
+FROM node:20-slim
 
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --omit=dev && npx playwright install chromium
+RUN npm install --omit=dev
 
 COPY . .
 

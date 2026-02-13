@@ -1,10 +1,20 @@
 // cart-worker-fast.js — Fast mode: direct GraphQL API for cart automation
 // Uses HTTP calls instead of browser automation for ~10x speed improvement.
-// Login still requires a headless browser (one-time), then cookies are cached.
+// Login uses pure HTTP (Azure AD B2C OAuth2) — no browser needed.
 
 const https = require("https");
-const { chromium } = require("playwright");
+const http = require("http");
 const path = require("path");
+
+// Playwright is optional — only needed for fetchCart/removeAllCartItems (browser scraping).
+// In Docker slim mode (no Playwright), those features gracefully degrade.
+function getChromium() {
+  try {
+    return require("playwright").chromium;
+  } catch {
+    return null;
+  }
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -102,6 +112,67 @@ function isSessionExpired(res) {
   return res.status === 401 || res.status === 403;
 }
 
+// --- HTTP helpers for pure HTTP login (no browser) ---
+
+const httpCookieJar = {}; // hostname -> { name: value }
+
+function parseCookiesFromHeaders(headers, url) {
+  const setCookies = headers["set-cookie"];
+  if (!setCookies) return;
+  const hostname = new URL(url).hostname;
+  if (!httpCookieJar[hostname]) httpCookieJar[hostname] = {};
+  const items = Array.isArray(setCookies) ? setCookies : [setCookies];
+  for (const item of items) {
+    const parts = item.split(";")[0];
+    const eqIdx = parts.indexOf("=");
+    if (eqIdx > 0) {
+      const name = parts.substring(0, eqIdx).trim();
+      const value = parts.substring(eqIdx + 1).trim();
+      httpCookieJar[hostname][name] = value;
+    }
+  }
+}
+
+function getJarCookieString(hostname) {
+  const cookies = httpCookieJar[hostname];
+  if (!cookies) return "";
+  return Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
+}
+
+function httpRequest(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const mod = parsed.protocol === "https:" ? https : http;
+    const reqOptions = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: options.method || "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        ...(options.headers || {}),
+      },
+    };
+    const jarCookies = getJarCookieString(parsed.hostname);
+    if (jarCookies) {
+      reqOptions.headers["Cookie"] = jarCookies;
+    }
+    const req = mod.request(reqOptions, (res) => {
+      parseCookiesFromHeaders(res.headers, url);
+      let data = "";
+      res.setEncoding("utf-8");
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        resolve({ status: res.statusCode, headers: res.headers, body: data });
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
+
 // --- Session management ---
 
 let cachedSession = null; // { cookies, cartId, shopId, mode }
@@ -113,7 +184,6 @@ async function getFastSession(settings, progressCallback) {
 
   // Reuse cached session if available and mode matches
   if (cachedSession) {
-    // Verify cookies still work with a lightweight query
     try {
       const testRes = await gqlGet(cachedSession.cookies, "ActiveCartId", { addressId: null, shopId }, HASHES.ActiveCartId);
       if (!isSessionExpired(testRes) && testRes.body?.data) {
@@ -121,7 +191,6 @@ async function getFastSession(settings, progressCallback) {
           progress("Reusing existing fast session");
           return cachedSession;
         }
-        // Mode differs but cookies still work — just need mode switch
         progress("Session valid, switching mode...");
         return cachedSession;
       }
@@ -130,129 +199,139 @@ async function getFastSession(settings, progressCallback) {
     cachedSession = null;
   }
 
-  const storeUrl = (settings && settings.storeUrl) || "https://shopwoodmans.com";
-  const zipCode = (settings && settings.zipCode) || "53177";
-  const baseUrl = storeUrl.replace(/\/+$/, "");
-
-  progress("Launching headless browser for login...");
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  });
-  const page = await context.newPage();
-
-  try {
-    progress("Loading store page...");
-    await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await sleep(2000);
-
-    // Handle ZIP code gate
-    const currentUrl = page.url();
-    const needsAuth = !currentUrl.includes("/store/") || currentUrl.includes("?next=");
-
-    let alreadyLoggedIn = false;
-
-    if (needsAuth) {
-      // Enter ZIP code first (may be needed before login form appears)
-      progress("Entering ZIP code...");
-      const zipStrategies = [
-        () => page.locator('input[placeholder*="ZIP" i]').first(),
-        () => page.locator('input[inputmode="numeric"]').first(),
-        () => page.locator('input[type="text"]').first(),
-      ];
-      for (const strategy of zipStrategies) {
-        try {
-          const el = strategy();
-          if (await el.isVisible({ timeout: 2000 })) {
-            await el.fill(zipCode);
-            await sleep(500);
-            await el.press("Enter");
-            await sleep(2000);
-            break;
-          }
-        } catch {}
-      }
-      try {
-        const shopBtn = page.locator('button:has-text("Start Shopping")').first();
-        if (await shopBtn.isVisible({ timeout: 2000 })) {
-          await shopBtn.click();
-          await sleep(3000);
-        }
-      } catch {}
-
-      // Dismiss shopping mode dialog before login (it can appear after ZIP)
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const dismissed = await dismissModeDialog(page, mode);
-        if (!dismissed) break;
-        await sleep(1000);
-      }
-
-      // Now login
-      if (settings && settings.username && settings.password) {
-        progress("Logging in...");
-        alreadyLoggedIn = await autoLoginFast(page, settings.username, settings.password);
-        if (alreadyLoggedIn) await sleep(2000);
-      }
-    }
-
-    // Dismiss shopping mode dialog (may appear after login or on store page)
-    progress("Setting shopping mode...");
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const dismissed = await dismissModeDialog(page, mode);
-      if (!dismissed) break;
-      await sleep(1000);
-    }
-
-    // Only check login status if we haven't already logged in
-    if (!alreadyLoggedIn && settings && settings.username && settings.password) {
-      const isLoggedIn = await page.evaluate(() => {
-        const links = document.querySelectorAll("a, button");
-        for (const el of links) {
-          const text = (el.textContent || "").trim();
-          if (/^(Log In|Sign In)/i.test(text) && text.length < 30) {
-            const rect = el.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) return false;
-          }
-        }
-        return true;
-      }).catch(() => true);
-
-      if (!isLoggedIn) {
-        progress("Logging in...");
-        await autoLoginFast(page, settings.username, settings.password);
-        await sleep(2000);
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const dismissed = await dismissModeDialog(page, mode);
-          if (!dismissed) break;
-          await sleep(1000);
-        }
-      }
-    }
-
-    await sleep(1000);
-
-    // Extract cookies
-    progress("Extracting session cookies...");
-    const cookies = await context.cookies();
-    const cookieString = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-
-    // Get cart ID via GraphQL
-    const cartRes = await gqlGet(cookieString, "ActiveCartId", { addressId: null, shopId }, HASHES.ActiveCartId);
-    if (isSessionExpired(cartRes)) {
-      throw new Error("Login failed — could not authenticate with store.");
-    }
-    const cartId = cartRes.body?.data?.shopBasket?.cartId;
-    if (!cartId) {
-      throw new Error("Could not retrieve cart ID. Login may have failed.");
-    }
-
-    progress(`Fast session ready (cart: ${cartId.substring(0, 8)}...)`);
-
-    cachedSession = { cookies: cookieString, cartId, shopId, mode };
-    return cachedSession;
-  } finally {
-    await browser.close().catch(() => {});
+  if (!settings || !settings.username || !settings.password) {
+    throw new Error("No username/password configured.");
   }
+
+  const storeUrl = (settings.storeUrl || "https://shopwoodmans.com").replace(/\/+$/, "");
+
+  // Clear cookie jar for fresh login
+  for (const key of Object.keys(httpCookieJar)) delete httpCookieJar[key];
+
+  // Step 1: Initiate SSO redirect to Azure AD B2C
+  progress("Authenticating (HTTP)...");
+  const ssoRes = await httpRequest(`${storeUrl}/rest/sso/auth/woodmans/init`);
+  if (ssoRes.status !== 302 || !ssoRes.headers.location) {
+    throw new Error(`SSO init failed (status ${ssoRes.status})`);
+  }
+  const b2cAuthorizeUrl = ssoRes.headers.location;
+
+  // Step 2: Load B2C login page — extract CSRF token
+  progress("Loading login page...");
+  const b2cPageRes = await httpRequest(b2cAuthorizeUrl);
+  if (b2cPageRes.status !== 200) {
+    throw new Error(`B2C login page failed (status ${b2cPageRes.status})`);
+  }
+
+  // Extract CSRF token
+  const csrfMatch = b2cPageRes.body.match(/csrf["'\s]*[:=]["'\s]*["']([^"']+)["']/i)
+    || b2cPageRes.body.match(/"csrf"\s*:\s*"([^"]+)"/)
+    || b2cPageRes.body.match(/var\s+CSRF_TOKEN\s*=\s*["']([^"']+)["']/)
+    || b2cPageRes.body.match(/[A-Za-z0-9+/=]{20,}/).toString().includes("==") && null;
+
+  let csrfToken = null;
+  if (csrfMatch) {
+    csrfToken = csrfMatch[1];
+  } else {
+    // Broader search for base64-ish CSRF value
+    const broadMatch = b2cPageRes.body.match(/csrf[^"]*":\s*"([A-Za-z0-9+/=]{20,})"/);
+    if (broadMatch) csrfToken = broadMatch[1];
+  }
+  if (!csrfToken) {
+    const settingsMatch = b2cPageRes.body.match(/var\s+SETTINGS\s*=\s*(\{[^;]+\});/);
+    if (settingsMatch) {
+      try { csrfToken = JSON.parse(settingsMatch[1]).csrf; } catch {}
+    }
+  }
+  if (!csrfToken) {
+    throw new Error("Could not extract CSRF token from login page.");
+  }
+
+  // Extract transaction ID
+  const txMatch = b2cPageRes.body.match(/"transId"\s*:\s*"([^"]+)"/)
+    || b2cPageRes.body.match(/transId["'\s]*[:=]["'\s]*["']([^"']+)["']/);
+  const txValue = txMatch ? txMatch[1] : "";
+  if (!txValue) {
+    throw new Error("Could not extract transaction ID from login page.");
+  }
+
+  // Step 3: Submit credentials
+  progress("Signing in...");
+  const b2cBase = "https://mywoodmans.b2clogin.com/mywoodmans.onmicrosoft.com/B2C_1_signup_signin";
+  const selfAssertedUrl = `${b2cBase}/SelfAsserted?tx=${encodeURIComponent(txValue)}&p=B2C_1_signup_signin`;
+  const formBody = `request_type=RESPONSE&email=${encodeURIComponent(settings.username)}&password=${encodeURIComponent(settings.password)}`;
+
+  const selfAssertedRes = await httpRequest(selfAssertedUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-CSRF-TOKEN": csrfToken,
+      "X-Requested-With": "XMLHttpRequest",
+      "Accept": "application/json, text/javascript, */*; q=0.01",
+      "Referer": b2cAuthorizeUrl,
+      "Origin": "https://mywoodmans.b2clogin.com",
+    },
+    body: formBody,
+  });
+
+  // Check response — B2C returns {"status":"200"} on success
+  try {
+    const selfBody = JSON.parse(selfAssertedRes.body);
+    if (selfBody.status !== "200") {
+      throw new Error("Login failed: " + (selfBody.message || "invalid credentials"));
+    }
+  } catch (e) {
+    if (e.message.startsWith("Login failed")) throw e;
+    if (selfAssertedRes.status !== 200) {
+      throw new Error(`Login submission failed (status ${selfAssertedRes.status})`);
+    }
+  }
+
+  // Step 4: Confirm login — get redirect with auth code
+  progress("Confirming session...");
+  const confirmedUrl = `${b2cBase}/api/CombinedSigninAndSignup/confirmed?rememberMe=false&csrf_token=${encodeURIComponent(csrfToken)}&tx=${encodeURIComponent(txValue)}&p=B2C_1_signup_signin`;
+  const confirmedRes = await httpRequest(confirmedUrl, {
+    headers: { "Referer": b2cAuthorizeUrl },
+  });
+
+  if (confirmedRes.status !== 302 || !confirmedRes.headers.location) {
+    throw new Error("Login confirmation failed — no redirect received.");
+  }
+
+  // Step 5: Follow callback to ShopWoodmans — sets session cookies
+  const callbackUrl = confirmedRes.headers.location;
+  const callbackRes = await httpRequest(callbackUrl);
+
+  // Follow the final redirect to storefront (captures remaining cookies)
+  if (callbackRes.status === 302 && callbackRes.headers.location) {
+    let nextUrl = callbackRes.headers.location;
+    if (!nextUrl.startsWith("http")) {
+      nextUrl = `${storeUrl}${nextUrl}`;
+    }
+    await httpRequest(nextUrl);
+  }
+
+  // Build cookie string from jar
+  const cookieString = getJarCookieString("shopwoodmans.com");
+  if (!cookieString) {
+    throw new Error("Login succeeded but no session cookies received.");
+  }
+
+  // Verify with GraphQL
+  progress("Verifying session...");
+  const cartRes = await gqlGet(cookieString, "ActiveCartId", { addressId: null, shopId }, HASHES.ActiveCartId);
+  if (isSessionExpired(cartRes)) {
+    throw new Error("Login failed — could not authenticate with store.");
+  }
+  const cartId = cartRes.body?.data?.shopBasket?.cartId;
+  if (!cartId) {
+    throw new Error("Could not retrieve cart ID. Login may have failed.");
+  }
+
+  progress(`Fast session ready (cart: ${cartId.substring(0, 8)}...)`);
+
+  cachedSession = { cookies: cookieString, cartId, shopId, mode };
+  return cachedSession;
 }
 
 function closeFastSession() {
@@ -663,6 +742,10 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
 // Needed because there's no GraphQL query to read cart contents.
 
 async function createPreAuthPage(session) {
+  const chromium = getChromium();
+  if (!chromium) {
+    throw new Error("Browser features unavailable — Playwright is not installed. (This is expected in Docker slim mode.)");
+  }
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
