@@ -613,11 +613,12 @@ async function fetchCartViaGraphQL(session, progressCallback) {
 
   progress("Fetching cart via GraphQL...");
 
-  // Send UpdateCartItemsMutation with empty updates — returns full cart state
+  // Send UpdateCartItemsMutation with a no-op update to get full cart state
+  // (empty cartItemUpdates was rejected as invalidInput since ~Feb 2026)
   const res = await withRetry(() => gqlPost(session.cookies, {
     operationName: "UpdateCartItemsMutation",
     variables: {
-      cartItemUpdates: [],
+      cartItemUpdates: [{ itemId: "0", quantity: 0, quantityType: "each", trackingParams: {} }],
       cartType,
       requestTimestamp: Date.now(),
       cartId: session.cartId,
@@ -686,12 +687,12 @@ async function removeAllCartItemsViaGraphQL(session, progressCallback) {
   const progress = progressCallback || (() => {});
   const cartType = (session.mode === "pickup") ? "grocery" : "list";
 
-  // Step 1: Fetch current cart items via empty update
+  // Step 1: Fetch current cart items via no-op update
   progress("Fetching cart contents for removal...");
   const fetchRes = await withRetry(() => gqlPost(session.cookies, {
     operationName: "UpdateCartItemsMutation",
     variables: {
-      cartItemUpdates: [],
+      cartItemUpdates: [{ itemId: "0", quantity: 0, quantityType: "each", trackingParams: {} }],
       cartType,
       requestTimestamp: Date.now(),
       cartId: session.cartId,
