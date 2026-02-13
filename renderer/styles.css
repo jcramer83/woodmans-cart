@@ -386,7 +386,7 @@ a.btn-icon { text-decoration: none; }
 .staple-search-row input { flex: 1; }
 
 #staple-search-results {
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
   margin-top: 8px;
   flex-shrink: 0;

@@ -371,7 +371,7 @@ async function selectStapleSearchResult(index) {
 function renderRecipes() {
   const list = document.getElementById("recipes-list");
   if (recipes.length === 0) {
-    list.innerHTML = '<p class="empty-state">No recipes yet. Click "+ Add" to create one.</p>';
+    list.innerHTML = '<p class="empty-state">No recipes yet. Click "AI Recipe" to get started.</p>';
     return;
   }
 
