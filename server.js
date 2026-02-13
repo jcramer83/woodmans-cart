@@ -289,7 +289,7 @@ function startServer(deps) {
 
   // AI recipe suggestions
   app.post("/api/recipe/suggest", async function (req, res) {
-    const { glutenFree, dairyFree, preferOrganic, pickyEater } = req.body;
+    const { prompt, glutenFree, dairyFree, preferOrganic, pickyEater } = req.body;
     const currentSettings = readJSON(SETTINGS_PATH) || {};
     const apiKey = currentSettings.anthropicApiKey;
 
@@ -309,13 +309,20 @@ function startServer(deps) {
       dietaryNote = "\nDietary requirements: " + flags.join(", ") + ". All suggestions must respect these constraints.";
     }
 
+    var userContent;
+    if (prompt) {
+      userContent = 'The user wants to make: "' + prompt + '". Suggest 4 specific recipe variations based on this. For example, if they said "pizza", suggest things like "Classic Pepperoni Pizza", "BBQ Chicken Flatbread", "Margherita Pizza", "Supreme Meat Lovers Pizza". Return a JSON array of objects with "name" (specific recipe title, 2-5 words) and "description" (one short enticing sentence, max 12 words).' + dietaryNote;
+    } else {
+      userContent = "Suggest 6 diverse dinner recipe ideas. Mix cuisines and styles (e.g. comfort food, healthy, quick weeknight, slow-cooked, international). Return a JSON array of objects with \"name\" (recipe title, 2-5 words) and \"description\" (one short enticing sentence, max 12 words)." + dietaryNote;
+    }
+
     const body = JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       system: "You suggest dinner recipe ideas. Return ONLY valid JSON, no other text.",
       messages: [{
         role: "user",
-        content: "Suggest 6 diverse dinner recipe ideas. Mix cuisines and styles (e.g. comfort food, healthy, quick weeknight, slow-cooked, international). Return a JSON array of objects with \"name\" (recipe title, 2-5 words) and \"description\" (one short enticing sentence, max 12 words)." + dietaryNote
+        content: userContent
       }],
     });
 

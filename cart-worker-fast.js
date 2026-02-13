@@ -596,6 +596,7 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
           name: detail.name || v4Id || "Unknown",
           price: detail.price || "",
           size: detail.size || "",
+          image: detail.image || "",
           quantity: ci.quantity || 1,
         };
       });
@@ -685,6 +686,7 @@ async function fetchCartViaRest(session, progressCallback) {
       name: detail.name || v4Id || ci.item_id || "Unknown",
       price: detail.price || "",
       size: detail.size || "",
+      image: detail.image || "",
       quantity: ci.quantity || 1,
     };
   });

@@ -93,10 +93,10 @@ function bindEvents() {
 
   // AI recipe
   document.getElementById("btn-ai-recipe").addEventListener("click", openAiRecipeModal);
-  document.getElementById("btn-ai-generate").addEventListener("click", generateAiRecipe);
+  document.getElementById("btn-ai-generate").addEventListener("click", searchAiRecipeOptions);
   document.getElementById("btn-ai-suggest").addEventListener("click", suggestRecipes);
   document.getElementById("ai-recipe-prompt").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") generateAiRecipe();
+    if (e.key === "Enter") searchAiRecipeOptions();
   });
 
   // Recipe item modal - product search
@@ -438,9 +438,10 @@ function renderRecipeItems() {
     .map(
       (item, i) => `
     <div class="item-row">
+      ${item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : ""}
       <div class="item-info">
         <div class="item-name">${esc(item.item || "(unnamed)")}</div>
-        <div class="item-detail">${esc(item.productName || "")}${item.note ? " (" + esc(item.note) + ")" : ""}</div>
+        <div class="item-detail">${esc(item.productName || "")}${item.note ? " (" + esc(item.note) + ")" : ""}${item.price ? " - " + esc(item.price) : ""}</div>
       </div>
       <span class="item-qty">x${item.quantity || 1}</span>
       <div class="item-actions">
@@ -797,6 +798,63 @@ function selectSuggestion(index) {
     chip.classList.toggle("selected", i === index);
   });
   document.getElementById("ai-recipe-prompt").focus();
+}
+
+async function searchAiRecipeOptions() {
+  const prompt = document.getElementById("ai-recipe-prompt").value.trim();
+  if (!prompt) return;
+
+  const suggestionsEl = document.getElementById("ai-suggestions");
+  const listEl = document.getElementById("ai-suggestions-list");
+  const btn = document.getElementById("btn-ai-generate");
+
+  suggestionsEl.style.display = "block";
+  listEl.innerHTML = '<span class="ai-suggestions-loading">Finding recipe options...</span>';
+  btn.disabled = true;
+
+  const glutenFree = document.getElementById("ai-gluten-free").checked;
+  const pickyEater = document.getElementById("ai-picky-eater").checked;
+  const dairyFree = document.getElementById("ai-dairy-free").checked;
+  const preferOrganic = document.getElementById("ai-prefer-organic").checked;
+
+  try {
+    const result = await appApi.suggestRecipes({ prompt, glutenFree, dairyFree, preferOrganic, pickyEater });
+
+    if (result.error) {
+      listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load options.</span>';
+      return;
+    }
+
+    const suggestions = result.suggestions || [];
+    if (suggestions.length === 0) {
+      listEl.innerHTML = '<span class="ai-suggestions-loading">No options returned.</span>';
+      return;
+    }
+
+    listEl.innerHTML = suggestions.map((s, i) =>
+      '<div class="ai-suggestion-chip" onclick="generateFromOption(' + i + ')">' +
+        '<div class="chip-name">' + esc(s.name) + '</div>' +
+        '<div class="chip-desc">' + esc(s.description) + '</div>' +
+      '</div>'
+    ).join("");
+
+    window._aiRecipeOptions = suggestions;
+  } catch (err) {
+    listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load options.</span>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function generateFromOption(index) {
+  const options = window._aiRecipeOptions;
+  if (!options || !options[index]) return;
+  document.getElementById("ai-recipe-prompt").value = options[index].name;
+  // Highlight selected
+  document.querySelectorAll("#ai-suggestions-list .ai-suggestion-chip").forEach((chip, i) => {
+    chip.classList.toggle("selected", i === index);
+  });
+  generateAiRecipe();
 }
 
 async function generateAiRecipe() {
@@ -1187,6 +1245,7 @@ function renderOnlineCart(result) {
     .map(
       (item) => `
     <div class="item-row">
+      ${item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : ""}
       <div class="item-info">
         <div class="item-name">${esc(item.name)}</div>
         <div class="item-detail">${item.size ? esc(item.size) : ""}${item.price ? " - " + esc(item.price) : ""}</div>
@@ -1480,6 +1539,7 @@ window.openRecipeItemModal = openRecipeItemModal;
 window.selectRecipeItemProduct = selectRecipeItemProduct;
 window.selectManualProduct = selectManualProduct;
 window.selectSuggestion = selectSuggestion;
+window.generateFromOption = generateFromOption;
 window.viewRecipe = viewRecipe;
 window.printRecipe = printRecipe;
 window.openRecipeExternal = openRecipeExternal;
