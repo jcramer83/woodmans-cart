@@ -856,24 +856,21 @@ async function generateAiRecipe() {
     document.getElementById("modal-ai-recipe").style.display = "none";
     viewRecipe(recipe.id);
 
-    // Look up product matches for each ingredient in background
-    matchRecipeProducts(recipe).then(() => {
-      appApi.saveRecipes(recipes);
+    // Look up product matches for each ingredient, then generate recipe image
+    matchRecipeProducts(recipe).then(async () => {
+      await appApi.saveRecipes(recipes);
       renderRecipes();
       renderCart();
       // Update view modal if still open
       if (document.getElementById("modal-view-recipe").style.display === "flex" && viewingRecipeId === recipe.id) {
         viewRecipe(recipe.id);
       }
-    });
-
-    // Generate recipe image in background, update modal when ready
-    appApi.generateRecipeImage(recipe.id, recipe.name).then((imgResult) => {
+      // Generate recipe image after product matching is done (avoids save race)
+      const imgResult = await appApi.generateRecipeImage(recipe.id, recipe.name);
       if (imgResult && imgResult.imageUrl && !imgResult.error) {
         recipe.imageUrl = imgResult.imageUrl;
-        appApi.saveRecipes(recipes);
+        await appApi.saveRecipes(recipes);
         renderRecipes();
-        // Update the already-open view modal with the image
         var imgEl = document.getElementById("view-recipe-image");
         if (imgEl && document.getElementById("modal-view-recipe").style.display === "flex") {
           imgEl.src = imgResult.imageUrl + "?t=" + Date.now();
@@ -891,17 +888,20 @@ async function generateAiRecipe() {
 }
 
 async function matchRecipeProducts(recipe) {
-  for (const item of recipe.items) {
+  for (let i = 0; i < recipe.items.length; i++) {
+    const item = recipe.items[i];
     if (item.image) continue;
     try {
       const results = await appApi.searchProducts(item.item);
-      if (results && results.length > 0 && !results.error) {
+      if (Array.isArray(results) && results.length > 0) {
         const p = results[0];
         item.productName = p.name || item.productName;
         item.price = p.price || item.price;
         item.image = p.image || "";
       }
-    } catch {}
+    } catch (err) {
+      console.warn("matchRecipeProducts failed for:", item.item, err);
+    }
   }
 }
 
