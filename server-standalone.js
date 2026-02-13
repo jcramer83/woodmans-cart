@@ -44,6 +44,9 @@ function readJSON(filePath) {
       if (process.env.ZIP_CODE) data.zipCode = process.env.ZIP_CODE;
       if (process.env.STORE_URL) data.storeUrl = process.env.STORE_URL;
       if (process.env.SHOPPING_MODE) data.shoppingMode = process.env.SHOPPING_MODE;
+      // Default to fast mode in standalone/Docker (no Playwright available)
+      if (data.fastMode === undefined) data.fastMode = true;
+      if (process.env.FAST_MODE !== undefined) data.fastMode = process.env.FAST_MODE !== "false";
     }
     return data;
   } catch {
