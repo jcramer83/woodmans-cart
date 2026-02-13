@@ -283,6 +283,27 @@
     </div>
   </div>
 
+  <!-- View Recipe Modal -->
+  <div id="modal-view-recipe" class="modal-overlay" style="display:none;">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3 id="view-recipe-title">Recipe</h3>
+        <button class="btn-close" data-close="modal-view-recipe">&times;</button>
+      </div>
+      <div class="modal-body" id="view-recipe-body">
+        <p id="view-recipe-servings" class="recipe-view-servings"></p>
+        <h4>Ingredients</h4>
+        <ul id="view-recipe-ingredients" class="recipe-view-ingredients"></ul>
+        <h4>Instructions</h4>
+        <ol id="view-recipe-instructions" class="recipe-view-instructions"></ol>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="printRecipe()">Print</button>
+        <button class="btn btn-accent" data-close="modal-view-recipe">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script src="api-adapter.js"></script>
   <script src="app.js"></script>
 </body>

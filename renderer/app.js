@@ -417,6 +417,7 @@ function renderRecipes() {
         <div class="item-detail">${(r.items || []).length} item${(r.items || []).length !== 1 ? "s" : ""}</div>
       </div>
       <div class="item-actions">
+        ${r.instructions && r.instructions.length > 0 ? `<button onclick="viewRecipe('${r.id}')" title="View Recipe">&#128220;</button>` : ""}
         <button onclick="openRecipeModal('${r.id}')" title="Edit">&#9998;</button>
         <button class="btn-del" onclick="deleteRecipe('${r.id}')" title="Delete">&#10005;</button>
       </div>
@@ -641,6 +642,50 @@ async function deleteRecipe(id) {
   renderCart();
 }
 
+// --- View Recipe ---
+
+function viewRecipe(id) {
+  const recipe = recipes.find((r) => r.id === id);
+  if (!recipe) return;
+
+  document.getElementById("view-recipe-title").textContent = recipe.name;
+
+  const servingsEl = document.getElementById("view-recipe-servings");
+  servingsEl.textContent = recipe.servings ? "Serves " + recipe.servings : "";
+
+  const ingredientsList = document.getElementById("view-recipe-ingredients");
+  const items = recipe.items || [];
+  if (items.length > 0) {
+    ingredientsList.innerHTML = items
+      .map((item) => {
+        let text = "";
+        if (item.quantity && item.quantity > 1) text += item.quantity + "x ";
+        text += esc(item.item || "");
+        if (item.note) text += " (" + esc(item.note) + ")";
+        return "<li>" + text + "</li>";
+      })
+      .join("");
+  } else {
+    ingredientsList.innerHTML = '<li class="empty-state">No ingredients</li>';
+  }
+
+  const instructionsList = document.getElementById("view-recipe-instructions");
+  const instructions = recipe.instructions || [];
+  if (instructions.length > 0) {
+    instructionsList.innerHTML = instructions
+      .map((step) => "<li>" + esc(step) + "</li>")
+      .join("");
+  } else {
+    instructionsList.innerHTML = '<li class="empty-state">No instructions available</li>';
+  }
+
+  document.getElementById("modal-view-recipe").style.display = "flex";
+}
+
+function printRecipe() {
+  window.print();
+}
+
 // --- AI Recipe Generation ---
 
 function openAiRecipeModal() {
@@ -684,6 +729,8 @@ async function generateAiRecipe() {
       id: generateId(),
       name: result.name || prompt,
       enabled: true,
+      servings: result.servings || servings,
+      instructions: result.instructions || [],
       items: (result.items || []).map((item) => ({
         item: item.item || "",
         quantity: item.quantity || 1,
@@ -1178,6 +1225,23 @@ async function startCartAutomation() {
     }
   }
 
+  // Auto-disable recipes whose items were all successfully added
+  let recipesChanged = false;
+  for (const r of recipes) {
+    if (!r.enabled) continue;
+    const recipeItems = r.items || [];
+    const recipeItemIds = recipeItems.map((item) => "recipe-" + r.id + "-" + (item.item || ""));
+    const allOk = recipeItemIds.length > 0 && recipeItemIds.every((id) => cartItemResults[id] === "ok");
+    if (allOk) {
+      r.enabled = false;
+      recipesChanged = true;
+    }
+  }
+  if (recipesChanged) {
+    await appApi.saveRecipes(recipes);
+    renderRecipes();
+  }
+
   cartRunning = false;
   document.getElementById("btn-start-cart").style.display = "inline-flex";
   document.getElementById("btn-stop-cart").style.display = "none";
@@ -1287,5 +1351,7 @@ window.changeCartQty = changeCartQty;
 window.openRecipeItemModal = openRecipeItemModal;
 window.selectRecipeItemProduct = selectRecipeItemProduct;
 window.selectManualProduct = selectManualProduct;
+window.viewRecipe = viewRecipe;
+window.printRecipe = printRecipe;
 window.toggleShoppingMode = toggleShoppingMode;
 window.toggleDarkMode = toggleDarkMode;
