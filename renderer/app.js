@@ -96,7 +96,10 @@ function bindEvents() {
   document.getElementById("btn-ai-generate").addEventListener("click", searchAiRecipeOptions);
   document.getElementById("btn-ai-suggest").addEventListener("click", suggestRecipes);
   document.getElementById("ai-recipe-prompt").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") searchAiRecipeOptions();
+    if (e.key === "Enter" && e.target.value.trim()) searchAiRecipeOptions();
+  });
+  document.getElementById("ai-recipe-prompt").addEventListener("input", (e) => {
+    document.getElementById("btn-ai-generate").disabled = !e.target.value.trim();
   });
 
   // Recipe item modal - product search
@@ -734,7 +737,7 @@ function openAiRecipeModal() {
   document.getElementById("ai-recipe-servings").value = "4";
   document.getElementById("ai-recipe-status").style.display = "none";
   document.getElementById("ai-recipe-status").innerHTML = "";
-  document.getElementById("btn-ai-generate").disabled = false;
+  document.getElementById("btn-ai-generate").disabled = true;
   document.getElementById("ai-suggestions").style.display = "none";
   document.getElementById("ai-suggestions-list").innerHTML = "";
   document.getElementById("modal-ai-recipe").style.display = "flex";
@@ -742,6 +745,9 @@ function openAiRecipeModal() {
 }
 
 async function suggestRecipes() {
+  document.getElementById("ai-recipe-prompt").value = "";
+  document.getElementById("btn-ai-generate").disabled = true;
+
   const suggestionsEl = document.getElementById("ai-suggestions");
   const listEl = document.getElementById("ai-suggestions-list");
   const btn = document.getElementById("btn-ai-suggest");
@@ -790,6 +796,7 @@ function selectSuggestion(index) {
   const suggestions = window._aiSuggestions;
   if (!suggestions || !suggestions[index]) return;
   document.getElementById("ai-recipe-prompt").value = suggestions[index].name;
+  document.getElementById("btn-ai-generate").disabled = false;
   // Highlight selected chip
   document.querySelectorAll(".ai-suggestion-chip").forEach((chip, i) => {
     chip.classList.toggle("selected", i === index);
