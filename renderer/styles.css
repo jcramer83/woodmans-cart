@@ -33,6 +33,7 @@ body {
 
 .logo {
   flex-shrink: 0;
+  border-radius: 6px;
 }
 
 .app-header h1 {
@@ -532,6 +533,14 @@ label input, label select {
   font-size: 13px;
 }
 
+.empty-state-img {
+  display: block;
+  margin: 0 auto 8px;
+  width: 80px;
+  height: 80px;
+  opacity: 0.7;
+}
+
 /* Modals */
 .modal-overlay {
   position: fixed;
@@ -989,6 +998,10 @@ body.dark select:focus {
 
 body.dark .empty-state {
   color: #555;
+}
+
+body.dark .empty-state-img {
+  opacity: 0.5;
 }
 
 body.dark .modal-overlay {
@@ -1522,6 +1535,11 @@ body.dark .recipe-view-instructions li {
   .empty-state {
     padding: 14px 8px;
     font-size: 13px;
+  }
+
+  .empty-state-img {
+    width: 64px;
+    height: 64px;
   }
 
   /* Cart estimate */

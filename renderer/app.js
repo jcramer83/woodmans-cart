@@ -233,7 +233,7 @@ function initDarkMode() {
 function renderStaples() {
   const list = document.getElementById("staples-list");
   if (staples.length === 0) {
-    list.innerHTML = '<p class="empty-state">No staples yet. Search below to add items.</p>';
+    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-staples.png" alt="" />No staples yet. Search below to add items.</p>';
     return;
   }
 
@@ -371,7 +371,7 @@ async function selectStapleSearchResult(index) {
 function renderRecipes() {
   const list = document.getElementById("recipes-list");
   if (recipes.length === 0) {
-    list.innerHTML = '<p class="empty-state">No recipes yet. Click "AI Recipe" to get started.</p>';
+    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-recipes.png" alt="" />No recipes yet. Click "AI Recipe" to get started.</p>';
     return;
   }
 
@@ -876,7 +876,7 @@ function renderCart() {
   estEl.textContent = hasEstimate ? `Est. $${total.toFixed(2)}` : "";
 
   if (items.length === 0) {
-    list.innerHTML = '<p class="empty-state">Cart is empty. Add staples or enable recipes to populate.</p>';
+    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-cart.png" alt="" />Cart is empty. Add staples or enable recipes to populate.</p>';
     return;
   }
 
