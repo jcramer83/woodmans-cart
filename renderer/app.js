@@ -356,9 +356,9 @@ async function selectStapleSearchResult(index) {
   };
 
   staples.push(staple);
+  excludedCartIds.add("staple-" + staple.id);
   await appApi.saveStaples(staples);
   renderStaples();
-  renderCart();
 
   // Clear search
   document.getElementById("staple-search-query").value = "";
