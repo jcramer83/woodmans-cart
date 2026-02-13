@@ -779,19 +779,25 @@ async function generateAiRecipe() {
     statusEl.textContent = `Added "${recipe.name}" with ${recipe.items.length} ingredients!`;
     statusEl.className = "ai-status success";
 
-    // Generate recipe image in background (don't block)
+    // Close AI modal and open the view recipe modal
+    document.getElementById("modal-ai-recipe").style.display = "none";
+    viewRecipe(recipe.id);
+
+    // Generate recipe image in background, update modal when ready
     appApi.generateRecipeImage(recipe.id, recipe.name).then((imgResult) => {
       if (imgResult && imgResult.imageUrl && !imgResult.error) {
         recipe.imageUrl = imgResult.imageUrl;
         appApi.saveRecipes(recipes);
         renderRecipes();
+        // Update the already-open view modal with the image
+        var imgEl = document.getElementById("view-recipe-image");
+        if (imgEl && document.getElementById("modal-view-recipe").style.display === "flex") {
+          imgEl.src = imgResult.imageUrl + "?t=" + Date.now();
+          imgEl.alt = recipe.name;
+          imgEl.style.display = "block";
+        }
       }
     });
-
-    // Close after a brief delay
-    setTimeout(() => {
-      document.getElementById("modal-ai-recipe").style.display = "none";
-    }, 1500);
   } catch (err) {
     statusEl.textContent = "Error: " + err.message;
     statusEl.className = "ai-status error";
