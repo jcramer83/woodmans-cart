@@ -1,18 +1,12 @@
 {
   "name": "woodmans-cart",
-  "version": "2.0.0",
-  "description": "Electron desktop app for managing grocery lists and automating ShopWoodmans.com cart",
-  "main": "main.js",
+  "version": "3.0.0",
+  "description": "Docker web app for managing grocery lists and automating ShopWoodmans.com cart via GraphQL",
   "scripts": {
-    "start": "electron .",
-    "setup": "npx playwright install chromium"
+    "start": "node server-standalone.js"
   },
   "dependencies": {
     "express": "^5.2.1",
     "ws": "^8.19.0"
-  },
-  "devDependencies": {
-    "electron": "^33.0.0",
-    "playwright": "^1.50.0"
   }
 }

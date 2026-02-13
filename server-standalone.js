@@ -1,5 +1,5 @@
-// server-standalone.js — Standalone entry point for Docker (no Electron)
-// Provides the same deps to server.js that main.js does, with env var overlay.
+// server-standalone.js — Entry point for Docker deployment
+// Provides deps to server.js with env var overlay for credentials.
 
 const path = require("path");
 const fs = require("fs");
@@ -44,9 +44,6 @@ function readJSON(filePath) {
       if (process.env.ZIP_CODE) data.zipCode = process.env.ZIP_CODE;
       if (process.env.STORE_URL) data.storeUrl = process.env.STORE_URL;
       if (process.env.SHOPPING_MODE) data.shoppingMode = process.env.SHOPPING_MODE;
-      // Default to fast mode in standalone/Docker (no Playwright available)
-      if (data.fastMode === undefined) data.fastMode = true;
-      if (process.env.FAST_MODE !== undefined) data.fastMode = process.env.FAST_MODE !== "false";
     }
     return data;
   } catch {
@@ -70,12 +67,6 @@ startServer({
   SETTINGS_PATH,
   STAPLES_PATH,
   RECIPES_PATH,
-  sendProgressToElectron: function (message) {
-    console.log("[progress]", message);
-  },
-  getMainWindow: function () {
-    return null;
-  },
 });
 
 console.log("Woodmans Cart standalone server starting...");

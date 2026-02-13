@@ -238,7 +238,6 @@ function openSettingsModal() {
   document.getElementById("setting-store-url").value = settings.storeUrl || "https://shopwoodmans.com";
   document.getElementById("setting-delay").value = settings.delayBetweenItems || 3000;
   document.getElementById("setting-api-key").value = settings.anthropicApiKey || "";
-  document.getElementById("setting-fast-mode").checked = !!settings.fastMode;
   document.getElementById("setting-show-log").checked = settings.showProgressLog !== false;
   document.getElementById("modal-settings").style.display = "flex";
 }
@@ -252,7 +251,6 @@ async function saveSettings() {
   settings.storeUrl = document.getElementById("setting-store-url").value.trim() || "https://shopwoodmans.com";
   settings.delayBetweenItems = parseInt(document.getElementById("setting-delay").value) || 3000;
   settings.anthropicApiKey = document.getElementById("setting-api-key").value.trim();
-  settings.fastMode = document.getElementById("setting-fast-mode").checked;
   settings.showProgressLog = document.getElementById("setting-show-log").checked;
   await appApi.saveSettings(settings);
   updateModeBadge();

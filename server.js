@@ -1,5 +1,4 @@
 // server.js — Express + WebSocket server for web clients
-// Started from main.js, runs inside the Electron process
 
 const express = require("express");
 const http = require("http");
@@ -9,7 +8,7 @@ const path = require("path");
 const PORT = 3456;
 
 function startServer(deps) {
-  const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, RECIPES_PATH, sendProgressToElectron, getMainWindow } = deps;
+  const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, RECIPES_PATH } = deps;
 
   const app = express();
   app.use(express.json());
@@ -33,27 +32,15 @@ function startServer(deps) {
     });
   }
 
-  // Combined sendProgress: sends to Electron window AND WebSocket clients
   function sendProgress(message) {
-    sendProgressToElectron(message);
     broadcast({ type: "progress", message: message });
   }
 
-  // Send item-done to both Electron and WebSocket
   function sendItemDone(data) {
-    const mainWindow = getMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("cart:item-done", data);
-    }
     broadcast({ type: "item-done", data: data });
   }
 
-  // Send online cart update to both Electron and WebSocket
   function sendOnlineUpdate(items) {
-    const mainWindow = getMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("cart:online-update", items);
-    }
     broadcast({ type: "online-update", items: items });
   }
 
@@ -109,24 +96,13 @@ function startServer(deps) {
     if (!query) return res.json({ error: "No query provided" });
 
     const currentSettings = readJSON(SETTINGS_PATH) || {};
-
-    if (currentSettings.fastMode) {
-      var fastWorker = require("./cart-worker-fast");
-      try {
-        var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-        var results = await fastWorker.searchProducts(query, session);
-        return res.json(results);
-      } catch (err) {
-        return res.json({ error: err.message });
-      }
-    }
-
-    var cartWorker = require("./cart-worker");
+    var fastWorker = require("./cart-worker-fast");
     try {
-      var results = await cartWorker.searchProducts(query, currentSettings);
-      res.json(results);
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      var results = await fastWorker.searchProducts(query, session);
+      return res.json(results);
     } catch (err) {
-      res.json({ error: err.message });
+      return res.json({ error: err.message });
     }
   });
 
@@ -143,102 +119,48 @@ function startServer(deps) {
     });
     const shoppingMode = mergedSettings.shoppingMode || "instore";
 
-    // --- Fast mode: direct GraphQL API ---
-    if (mergedSettings.fastMode) {
-      var fastWorker = require("./cart-worker-fast");
-      try {
-        var session = await fastWorker.getFastSession(mergedSettings, sendProgress);
-        cartWorkerInstance = { active: true };
-        await fastWorker.ensureShoppingMode(session, shoppingMode, sendProgress);
-
-        var fastResult = await fastWorker.searchAndAddAll(
-          session, items, sendProgress,
-          function (itemDoneData) { sendItemDone(itemDoneData); },
-          function () { return !cartWorkerInstance; }
-        );
-
-        var ok = fastResult.results.filter(function (r) { return r.status === "ok"; }).length;
-        var failed = fastResult.results.filter(function (r) { return r.status === "fail"; }).length;
-        var skipped = fastResult.results.filter(function (r) { return r.status === "skip"; }).length;
-        sendProgress("Done! Added: " + ok + ", Failed: " + failed + ", Skipped: " + skipped);
-
-        // Refresh the online cart after adding items — use cart items from the add response first
-        if (ok > 0) {
-          if (fastResult.cartItems && fastResult.cartItems.length > 0) {
-            sendOnlineUpdate(fastResult.cartItems);
-            sendProgress("Online cart updated (" + fastResult.cartItems.length + " items).");
-          } else {
-            try {
-              sendProgress("Fetching updated Woodmans cart...");
-              var cartItems = await fastWorker.fetchCart(session, sendProgress);
-              if (cartItems && Array.isArray(cartItems) && cartItems.length > 0) {
-                sendOnlineUpdate(cartItems);
-                sendProgress("Online cart updated (" + cartItems.length + " items).");
-              }
-            } catch (fetchErr) {
-              sendProgress("Could not fetch online cart: " + fetchErr.message);
-            }
-          }
-        }
-
-        cartWorkerInstance = null;
-        return res.json({ ok: ok, failed: failed, skipped: skipped, results: fastResult.results });
-      } catch (err) {
-        sendProgress("Error: " + err.message);
-        cartWorkerInstance = null;
-        return res.json({ ok: 0, failed: 0, skipped: 0, error: err.message });
-      }
-    }
-
-    // --- Standard mode: browser automation ---
-    var cartWorker = require("./cart-worker");
+    var fastWorker = require("./cart-worker-fast");
     try {
-      var page = await cartWorker.getSearchSession(mergedSettings, sendProgress);
+      var session = await fastWorker.getFastSession(mergedSettings, sendProgress);
       cartWorkerInstance = { active: true };
+      await fastWorker.ensureShoppingMode(session, shoppingMode, sendProgress);
 
-      await cartWorker.ensureShoppingMode(page, shoppingMode, sendProgress);
+      var fastResult = await fastWorker.searchAndAddAll(
+        session, items, sendProgress,
+        function (itemDoneData) { sendItemDone(itemDoneData); },
+        function () { return !cartWorkerInstance; }
+      );
 
-      var results = [];
-      for (var i = 0; i < items.length; i++) {
-        if (!cartWorkerInstance) {
-          sendProgress("Cart automation stopped by user.");
-          break;
-        }
-        var result = await cartWorker.searchAndAdd(page, items[i], i, items.length, sendProgress);
-        results.push(result);
-        sendItemDone({
-          id: items[i].id,
-          index: i,
-          total: items.length,
-          status: result.status,
-        });
-        if (i < items.length - 1) {
-          await cartWorker.sleep(mergedSettings.delayBetweenItems || 2000);
-        }
-      }
-
-      var ok = results.filter(function (r) { return r.status === "ok"; }).length;
-      var failed = results.filter(function (r) { return r.status === "fail"; }).length;
-      var skipped = results.filter(function (r) { return r.status === "skip"; }).length;
+      var ok = fastResult.results.filter(function (r) { return r.status === "ok"; }).length;
+      var failed = fastResult.results.filter(function (r) { return r.status === "fail"; }).length;
+      var skipped = fastResult.results.filter(function (r) { return r.status === "skip"; }).length;
       sendProgress("Done! Added: " + ok + ", Failed: " + failed + ", Skipped: " + skipped);
 
-      // Scrape cart after automation
-      sendProgress("Fetching updated Woodmans cart...");
-      await cartWorker.ensureShoppingMode(page, shoppingMode, sendProgress);
-      try {
-        var cartItems = await cartWorker.scrapeCartFromPage(page, shoppingMode, sendProgress);
-        sendOnlineUpdate(cartItems);
-        sendProgress("Online cart updated (" + (Array.isArray(cartItems) ? cartItems.length : 0) + " items).");
-      } catch (scrapeErr) {
-        sendProgress("Could not fetch online cart: " + scrapeErr.message);
+      // Refresh the online cart after adding items — use cart items from the add response first
+      if (ok > 0) {
+        if (fastResult.cartItems && fastResult.cartItems.length > 0) {
+          sendOnlineUpdate(fastResult.cartItems);
+          sendProgress("Online cart updated (" + fastResult.cartItems.length + " items).");
+        } else {
+          try {
+            sendProgress("Fetching updated Woodmans cart...");
+            var cartItems = await fastWorker.fetchCart(session, sendProgress);
+            if (cartItems && Array.isArray(cartItems) && cartItems.length > 0) {
+              sendOnlineUpdate(cartItems);
+              sendProgress("Online cart updated (" + cartItems.length + " items).");
+            }
+          } catch (fetchErr) {
+            sendProgress("Could not fetch online cart: " + fetchErr.message);
+          }
+        }
       }
 
       cartWorkerInstance = null;
-      res.json({ ok: ok, failed: failed, skipped: skipped, results: results });
+      return res.json({ ok: ok, failed: failed, skipped: skipped, results: fastResult.results });
     } catch (err) {
       sendProgress("Error: " + err.message);
       cartWorkerInstance = null;
-      res.json({ ok: 0, failed: 0, skipped: 0, error: err.message });
+      return res.json({ ok: 0, failed: 0, skipped: 0, error: err.message });
     }
   });
 
@@ -253,50 +175,28 @@ function startServer(deps) {
   // Fetch current online cart
   app.post("/api/cart/fetch", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};
-
-    if (currentSettings.fastMode) {
-      var fastWorker = require("./cart-worker-fast");
-      try {
-        var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-        await fastWorker.ensureShoppingMode(session, currentSettings.shoppingMode || "instore", sendProgress);
-        var items = await fastWorker.fetchCart(session, sendProgress);
-        return res.json(items);
-      } catch (err) {
-        return res.json({ error: err.message });
-      }
-    }
-
-    var cartWorker = require("./cart-worker");
+    var fastWorker = require("./cart-worker-fast");
     try {
-      var items = await cartWorker.fetchCurrentCart(currentSettings, sendProgress);
-      res.json(items);
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, currentSettings.shoppingMode || "instore", sendProgress);
+      var items = await fastWorker.fetchCart(session, sendProgress);
+      return res.json(items);
     } catch (err) {
-      res.json({ error: err.message });
+      return res.json({ error: err.message });
     }
   });
 
   // Remove all online cart items
   app.post("/api/cart/remove-all", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};
-
-    if (currentSettings.fastMode) {
-      var fastWorker = require("./cart-worker-fast");
-      try {
-        var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-        await fastWorker.ensureShoppingMode(session, currentSettings.shoppingMode || "instore", sendProgress);
-        var result = await fastWorker.removeAllCartItems(session, sendProgress);
-        return res.json(result);
-      } catch (err) {
-        return res.json({ error: err.message });
-      }
-    }
-
-    var cartWorker = require("./cart-worker");
+    var fastWorker = require("./cart-worker-fast");
     try {
-      var result = await cartWorker.removeAllCartItems(currentSettings, sendProgress);
-      res.json(result);
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, currentSettings.shoppingMode || "instore", sendProgress);
+      var result = await fastWorker.removeAllCartItems(session, sendProgress);
+      return res.json(result);
     } catch (err) {
-      res.json({ error: err.message });
+      return res.json({ error: err.message });
     }
   });
 
@@ -307,7 +207,7 @@ function startServer(deps) {
     const apiKey = currentSettings.anthropicApiKey;
 
     if (!apiKey) {
-      return res.json({ error: "No Claude API key configured. Add it in Settings on the desktop app." });
+      return res.json({ error: "No Claude API key configured. Add it in Settings." });
     }
 
     const httpsModule = require("https");

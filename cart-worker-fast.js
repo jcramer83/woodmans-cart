@@ -1,26 +1,9 @@
-// cart-worker-fast.js — Fast mode: direct GraphQL API for cart automation
-// Uses HTTP calls instead of browser automation for ~10x speed improvement.
-// Login uses pure HTTP (Azure AD B2C OAuth2) — no browser needed.
+// cart-worker-fast.js — Direct GraphQL API for cart automation
+// Uses HTTP calls for all operations. No browser needed.
+// Login uses pure HTTP (Azure AD B2C OAuth2).
 
 const https = require("https");
 const http = require("http");
-const path = require("path");
-
-// Playwright is optional — only needed for fetchCart/removeAllCartItems (browser scraping).
-// In Docker slim mode (no Playwright), those features gracefully degrade.
-function getChromium() {
-  try {
-    const pw = require("playwright");
-    if (!pw || !pw.chromium) return null;
-    // Check that the browser binary actually exists
-    const fs = require("fs");
-    const execPath = pw.chromium.executablePath();
-    if (!execPath || !fs.existsSync(execPath)) return null;
-    return pw.chromium;
-  } catch {
-    return null;
-  }
-}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -344,131 +327,6 @@ function closeFastSession() {
   cachedSession = null;
 }
 
-// --- Browser helpers for login (simplified from cart-worker.js) ---
-
-async function autoLoginFast(page, username, password) {
-  try {
-    const loginLinkStrategies = [
-      () => page.locator('a:has-text("Log In")').first(),
-      () => page.locator('button:has-text("Log In")').first(),
-      () => page.locator('a:has-text("Sign In")').first(),
-      () => page.locator('button:has-text("Sign In")').first(),
-    ];
-
-    let loginClicked = false;
-    for (const strategy of loginLinkStrategies) {
-      try {
-        const el = strategy();
-        if (await el.isVisible({ timeout: 3000 })) {
-          await el.click();
-          try {
-            await page.waitForSelector('input[type="email"], input[type="password"]', { timeout: 5000 });
-          } catch {
-            await sleep(1500);
-          }
-          loginClicked = true;
-          break;
-        }
-      } catch {}
-    }
-    if (!loginClicked) return false;
-
-    // Fill email
-    const emailStrategies = [
-      () => page.locator('input[type="email"]').first(),
-      () => page.locator('input[name="email"]').first(),
-      () => page.locator('input[placeholder*="email" i]').first(),
-    ];
-    let emailFilled = false;
-    for (const strategy of emailStrategies) {
-      try {
-        const el = strategy();
-        if (await el.isVisible({ timeout: 3000 })) {
-          await el.fill(username);
-          emailFilled = true;
-          break;
-        }
-      } catch {}
-    }
-    if (!emailFilled) return false;
-
-    // Fill password
-    try {
-      const passInput = page.locator('input[type="password"]').first();
-      if (await passInput.isVisible({ timeout: 3000 })) {
-        await passInput.fill(password);
-      } else {
-        return false;
-      }
-    } catch { return false; }
-
-    // Submit
-    const submitStrategies = [
-      () => page.locator('button[type="submit"]').first(),
-      () => page.locator('button:has-text("Log In")').first(),
-      () => page.locator('button:has-text("Sign In")').first(),
-    ];
-    for (const strategy of submitStrategies) {
-      try {
-        const el = strategy();
-        if (await el.isVisible({ timeout: 3000 })) {
-          await el.click();
-          try {
-            await page.waitForURL(/\/store\//, { timeout: 10000 });
-          } catch {
-            await sleep(3000);
-          }
-          return true;
-        }
-      } catch {}
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-async function dismissModeDialog(page, mode) {
-  const modeLabel = mode === "pickup" ? "Pickup" : "In-Store";
-  try {
-    await page.waitForSelector('text="How would you like to shop?"', { timeout: 5000 });
-  } catch {
-    return false;
-  }
-
-  let scopeLocator = null;
-  const dialog = page.locator('[role="dialog"]:has-text("How would you like to shop")');
-  if (await dialog.isVisible({ timeout: 1000 }).catch(() => false)) {
-    scopeLocator = dialog;
-  } else {
-    const portal = page.locator('.__reakit-portal:has-text("How would you like to shop")');
-    if (await portal.isVisible({ timeout: 1000 }).catch(() => false)) {
-      scopeLocator = portal;
-    }
-  }
-  if (!scopeLocator) return false;
-
-  try {
-    const modeBtn = scopeLocator.locator(`button:has-text("${modeLabel}")`).first();
-    if (await modeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modeBtn.click({ force: true });
-      await sleep(1000);
-    }
-  } catch {}
-
-  for (const text of ["Confirm", "Continue"]) {
-    try {
-      const btn = scopeLocator.locator(`button:has-text("${text}")`).first();
-      if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await btn.click({ force: true });
-        await sleep(2000);
-        return true;
-      }
-    } catch {}
-  }
-  return false;
-}
-
 // --- Helper: extract name/price/size from an Items response ---
 
 function parseItemDetails(itemsArray) {
@@ -743,296 +601,169 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
   return { results, cartItems };
 }
 
-// --- Pre-authenticated browser for cart operations ---
-// Uses the fast session's cookies to skip login entirely (~5s vs 30-60s).
-// Needed because there's no GraphQL query to read cart contents.
+// --- GraphQL cart fetch ---
 
-async function createPreAuthPage(session) {
-  const chromium = getChromium();
-  if (!chromium) {
-    throw new Error("Browser features unavailable — Playwright is not installed. (This is expected in Docker slim mode.)");
-  }
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  });
+async function fetchCartViaGraphQL(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  const shopId = session.shopId || SHOP_IDS.instore;
+  const postalCode = "53177";
+  const cartType = (session.mode === "pickup") ? "grocery" : "list";
 
-  // Inject session cookies into the browser context
-  const cookiePairs = session.cookies.split("; ")
-    .map((pair) => {
-      const eqIdx = pair.indexOf("=");
-      if (eqIdx <= 0) return null;
-      return {
-        name: pair.substring(0, eqIdx),
-        value: pair.substring(eqIdx + 1),
-        url: "https://shopwoodmans.com",
-      };
-    })
-    .filter(Boolean);
-  await context.addCookies(cookiePairs);
+  progress("Fetching cart via GraphQL...");
 
-  const page = await context.newPage();
-  await page.goto("https://shopwoodmans.com/store/woodmans-food-markets/storefront", {
-    waitUntil: "domcontentloaded",
-    timeout: 30000,
-  });
-  await sleep(3000);
+  // Send UpdateCartItemsMutation with empty updates — returns full cart state
+  const res = await withRetry(() => gqlPost(session.cookies, {
+    operationName: "UpdateCartItemsMutation",
+    variables: {
+      cartItemUpdates: [],
+      cartType,
+      requestTimestamp: Date.now(),
+      cartId: session.cartId,
+    },
+    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
+  }));
 
-  // Dismiss any mode dialog or popup
-  const mode = session.mode || "instore";
-  await dismissModeDialog(page, mode);
-  const cartWorker = require("./cart-worker");
-  await cartWorker.closePopups(page);
-
-  // For Pickup mode: the fresh browser defaults to In-Store regardless of cookies.
-  // Switch via server-side VisitShop (proven gqlPost) then reload so the browser
-  // picks up the Pickup storefront. In-Store is left untouched (already works).
-  if (mode === "pickup") {
-    const shopId = session.shopId || SHOP_IDS.pickup;
-    await gqlPost(session.cookies, {
-      operationName: "VisitShop",
-      variables: { shopId },
-      extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.VisitShop } },
-    }).catch(() => {});
-
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
-    await sleep(3000);
-    await dismissModeDialog(page, mode);
-    await cartWorker.closePopups(page);
+  if (isSessionExpired(res)) {
+    closeFastSession();
+    throw new Error("Session expired");
   }
 
-  return { browser, context, page };
+  if (res.body?.errors) {
+    throw new Error("GraphQL error: " + (res.body.errors[0]?.message || "unknown"));
+  }
+
+  const rawCartItems = res.body?.data?.updateCartItems?.cart?.cartItemCollection?.cartItems;
+  if (!rawCartItems || !Array.isArray(rawCartItems)) {
+    throw new Error("Unexpected response structure — no cartItems found");
+  }
+
+  if (rawCartItems.length === 0) {
+    progress("Cart is empty.");
+    return [];
+  }
+
+  // Enrich with Items query for name/price/size
+  const cartItemIds = rawCartItems.map((ci) => ci.itemId).filter(Boolean);
+  let detailMap = {};
+
+  if (cartItemIds.length > 0) {
+    progress(`Fetching details for ${cartItemIds.length} cart item(s)...`);
+    const detailsRes = await withRetry(() => gqlGet(session.cookies, "Items", {
+      ids: cartItemIds, shopId, zoneId: ZONE_ID, postalCode,
+    }, HASHES.Items));
+
+    if (!isSessionExpired(detailsRes) && detailsRes.body?.data?.items) {
+      detailMap = parseItemDetails(detailsRes.body.data.items);
+    }
+  }
+
+  const cartItems = rawCartItems.map((ci) => {
+    const detail = detailMap[ci.itemId] || {};
+    return {
+      name: detail.name || ci.itemId,
+      price: detail.price || "",
+      size: detail.size || "",
+      quantity: ci.quantity || 1,
+    };
+  });
+
+  progress(`Found ${cartItems.length} item(s) in cart.`);
+  return cartItems;
 }
 
-// --- Fetch current cart via pre-authenticated browser ---
+// --- GraphQL cart removal ---
+
+async function removeAllCartItemsViaGraphQL(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  const cartType = (session.mode === "pickup") ? "grocery" : "list";
+
+  // Step 1: Fetch current cart items via empty update
+  progress("Fetching cart contents for removal...");
+  const fetchRes = await withRetry(() => gqlPost(session.cookies, {
+    operationName: "UpdateCartItemsMutation",
+    variables: {
+      cartItemUpdates: [],
+      cartType,
+      requestTimestamp: Date.now(),
+      cartId: session.cartId,
+    },
+    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
+  }));
+
+  if (isSessionExpired(fetchRes)) {
+    closeFastSession();
+    throw new Error("Session expired");
+  }
+
+  if (fetchRes.body?.errors) {
+    throw new Error("GraphQL error: " + (fetchRes.body.errors[0]?.message || "unknown"));
+  }
+
+  const rawCartItems = fetchRes.body?.data?.updateCartItems?.cart?.cartItemCollection?.cartItems;
+  if (!rawCartItems || rawCartItems.length === 0) {
+    progress("Cart is already empty.");
+    return { removed: 0 };
+  }
+
+  // Step 2: Batch remove — set quantity:0 for all items
+  progress(`Removing ${rawCartItems.length} item(s) from cart...`);
+  const removeUpdates = rawCartItems
+    .filter((ci) => ci.itemId)
+    .map((ci) => ({
+      itemId: ci.itemId,
+      quantity: 0,
+      quantityType: "each",
+      trackingParams: {},
+    }));
+
+  const removeRes = await withRetry(() => gqlPost(session.cookies, {
+    operationName: "UpdateCartItemsMutation",
+    variables: {
+      cartItemUpdates: removeUpdates,
+      cartType,
+      requestTimestamp: Date.now(),
+      cartId: session.cartId,
+    },
+    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
+  }));
+
+  if (isSessionExpired(removeRes)) {
+    closeFastSession();
+    throw new Error("Session expired");
+  }
+
+  // Step 3: Verify — check if any items remain
+  const remaining = removeRes.body?.data?.updateCartItems?.cart?.cartItemCollection?.cartItems || [];
+
+  if (remaining.length > 0) {
+    // Fallback: remove stragglers one by one
+    progress(`${remaining.length} item(s) remain — removing individually...`);
+    for (const ci of remaining) {
+      if (!ci.itemId) continue;
+      await withRetry(() => gqlPost(session.cookies, {
+        operationName: "UpdateCartItemsMutation",
+        variables: {
+          cartItemUpdates: [{ itemId: ci.itemId, quantity: 0, quantityType: "each", trackingParams: {} }],
+          cartType,
+          requestTimestamp: Date.now(),
+          cartId: session.cartId,
+        },
+        extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
+      })).catch(() => {});
+    }
+  }
+
+  const removed = rawCartItems.length;
+  progress(`Removed ${removed} item(s) from cart.`);
+  return { removed };
+}
 
 async function fetchCart(session, progressCallback) {
-  const progress = progressCallback || (() => {});
-  const mode = session.mode || "instore";
-
-  progress("Loading cart...");
-  const { browser, page } = await createPreAuthPage(session);
-
-  try {
-    const cartWorker = require("./cart-worker");
-    const items = await cartWorker.scrapeCartFromPage(page, mode, progress);
-    return items;
-  } finally {
-    await browser.close().catch(() => {});
-  }
+  return await fetchCartViaGraphQL(session, progressCallback);
 }
 
-// --- Remove all cart items via pre-authenticated browser ---
-// Uses browser button-clicking (same as cart-worker.js) because GraphQL item IDs
-// from search results don't match actual cart item IDs, especially in Pickup mode.
-
 async function removeAllCartItems(session, progressCallback) {
-  const progress = progressCallback || (() => {});
-  const mode = session.mode || "instore";
-  const cartWorker = require("./cart-worker");
-
-  progress("Loading cart for removal...");
-  const { browser, page } = await createPreAuthPage(session);
-
-  try {
-    // Open the cart sidebar
-    progress("Opening cart sidebar...");
-    let cartBtn = null;
-    const cartSelectors = [
-      '[aria-label*="View Cart" i]',
-      'button[aria-label*="cart" i]',
-      '[aria-label*="cart" i]',
-      '[data-testid*="cart"]',
-      'a[href*="cart"]',
-    ];
-
-    for (let retry = 0; retry < 2; retry++) {
-      for (const sel of cartSelectors) {
-        try {
-          const el = page.locator(sel).first();
-          if (await el.isVisible({ timeout: 5000 })) {
-            cartBtn = el;
-            break;
-          }
-        } catch {}
-      }
-      if (cartBtn) break;
-      await cartWorker.closePopups(page);
-      await sleep(2000);
-    }
-
-    if (!cartBtn) {
-      return { error: "Could not find cart button." };
-    }
-
-    const cartLabel = await cartBtn.getAttribute("aria-label").catch(() => "");
-    const countMatch = cartLabel && cartLabel.match(/(\d+)/);
-    const itemCount = countMatch ? parseInt(countMatch[1]) : -1;
-
-    if (itemCount === 0) {
-      progress("Cart is already empty.");
-      return { removed: 0 };
-    }
-
-    progress(`Found ${itemCount > 0 ? itemCount : "some"} item(s) in cart. Opening sidebar...`);
-    await cartBtn.click({ force: true });
-    await sleep(3000);
-
-    // Strategy A: Click "Manage" → "Remove all items" (bulk remove)
-    let bulkRemoved = false;
-    const manageStrategies = [
-      () => page.locator('button:has-text("Manage")').first(),
-      () => page.locator('a:has-text("Manage")').first(),
-      () => page.locator('button:has-text("Edit")').first(),
-      () => page.locator('a:has-text("Edit")').first(),
-    ];
-
-    for (const strategy of manageStrategies) {
-      try {
-        const el = strategy();
-        if (await el.isVisible({ timeout: 3000 })) {
-          progress("Found Manage button, trying bulk remove...");
-          await el.click({ force: true });
-          await sleep(2000);
-
-          const removeAllStrategies = [
-            () => page.locator('button:has-text("Remove all items")').first(),
-            () => page.locator('button:has-text("Remove all")').first(),
-          ];
-
-          for (const rmStrategy of removeAllStrategies) {
-            try {
-              const rmEl = rmStrategy();
-              if (await rmEl.isVisible({ timeout: 3000 })) {
-                await rmEl.click({ force: true });
-                await sleep(3000);
-
-                // Handle confirmation dialog
-                for (const cfmText of ["Remove all", "Confirm", "Yes", "Remove"]) {
-                  try {
-                    const cfmEl = page.locator(`[role="dialog"] button:has-text("${cfmText}")`).first();
-                    if (await cfmEl.isVisible({ timeout: 2000 }).catch(() => false)) {
-                      await cfmEl.click({ force: true });
-                      await sleep(2000);
-                      break;
-                    }
-                  } catch {}
-                }
-
-                bulkRemoved = true;
-                break;
-              }
-            } catch {}
-          }
-          break;
-        }
-      } catch {}
-    }
-
-    // Strategy B: Remove items one at a time by clicking Remove/Decrement buttons
-    if (!bulkRemoved) {
-      progress("Removing items individually...");
-      let clickCount = 0;
-      const maxClicks = (itemCount > 0 ? itemCount * 15 : 100);
-      let lastItemName = "";
-
-      // Pickup mode has Remove buttons with empty aria-label (just text "Remove")
-      // In-Store mode has buttons with aria-label="Remove <item>" or "Decrement quantity of <item>"
-      const itemBtnSelectors = [
-        '[role="dialog"] button[aria-label^="Remove " i]',
-        'button[aria-label^="Decrement quantity" i]',
-        '[role="dialog"] [role="group"] button:has-text("Remove")',
-      ];
-
-      while (clickCount < maxClicks) {
-        let targetBtn = null;
-        for (let wait = 0; wait < 4; wait++) {
-          for (const sel of itemBtnSelectors) {
-            try {
-              const btn = page.locator(sel).first();
-              if (await btn.isVisible({ timeout: 1500 })) {
-                targetBtn = btn;
-                break;
-              }
-            } catch {}
-          }
-          if (targetBtn) break;
-          await sleep(1000);
-        }
-
-        if (!targetBtn) break;
-
-        // Get item name from aria-label or from parent group's aria-label
-        const label = await targetBtn.getAttribute("aria-label").catch(() => "") || "";
-        let itemName = label
-          .replace(/^Decrement quantity of\s*/i, "")
-          .replace(/^Remove\s*/i, "");
-        if (!itemName) {
-          // Pickup mode: get name from the parent [role="group"] aria-label
-          itemName = await targetBtn.evaluate(el => {
-            const group = el.closest('[role="group"]');
-            return group ? (group.getAttribute('aria-label') || '') : '';
-          }).catch(() => "");
-        }
-        itemName = itemName || "item";
-
-        if (itemName !== lastItemName) {
-          progress(`  Removing: ${itemName}...`);
-          lastItemName = itemName;
-        }
-
-        try {
-          await targetBtn.click({ force: true });
-        } catch {
-          try {
-            await targetBtn.scrollIntoViewIfNeeded();
-            await sleep(500);
-            await targetBtn.click({ force: true });
-          } catch { break; }
-        }
-        clickCount++;
-        await sleep(2500);
-
-        // Handle confirmation popups
-        for (const cfmSel of [
-          '[role="alertdialog"] button:has-text("Remove")',
-          '[role="alertdialog"] button:has-text("Confirm")',
-          '[role="alertdialog"] button:has-text("Yes")',
-        ]) {
-          try {
-            const cfm = page.locator(cfmSel).first();
-            if (await cfm.isVisible({ timeout: 1000 }).catch(() => false)) {
-              await cfm.click({ force: true });
-              await sleep(2000);
-              break;
-            }
-          } catch {}
-        }
-      }
-
-      // Check final cart count
-      let finalCount = -1;
-      try {
-        await cartWorker.closePopups(page);
-        await sleep(1000);
-        const cartBtnFinal = page.locator('[aria-label*="View Cart" i]').first();
-        const finalLabel = await cartBtnFinal.getAttribute("aria-label").catch(() => "");
-        const match = finalLabel.match(/(\d+)/);
-        finalCount = match ? parseInt(match[1]) : -1;
-      } catch {}
-
-      const removed = finalCount >= 0 ? Math.max(0, itemCount - finalCount) : clickCount;
-      progress(`Removed ${removed} item(s) from cart.${finalCount > 0 ? ` (${finalCount} remaining)` : ""}`);
-      return { removed };
-    }
-
-    // Bulk remove succeeded
-    await cartWorker.closePopups(page);
-    progress(`Done! Removed ${itemCount > 0 ? itemCount : ""} item(s) from cart.`);
-    return { removed: itemCount > 0 ? itemCount : 1 };
-  } finally {
-    await browser.close().catch(() => {});
-  }
+  return await removeAllCartItemsViaGraphQL(session, progressCallback);
 }
 
 module.exports = {

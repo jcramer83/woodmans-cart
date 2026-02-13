@@ -1,18 +1,6 @@
-// api-adapter.js — Environment-aware API layer
-// In Electron: proxies to window.api (IPC)
-// In browser:  uses fetch() + WebSocket
+// api-adapter.js — Web API layer using fetch() + WebSocket
 
 (function () {
-  const isElectron = !!window.api;
-
-  if (isElectron) {
-    // Electron — just use the existing preload bridge
-    window.appApi = window.api;
-    return;
-  }
-
-  // --- Web browser mode ---
-
   // WebSocket connection with auto-reconnect
   let ws = null;
   let wsReady = false;
