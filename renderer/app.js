@@ -739,9 +739,6 @@ function openAiRecipeModal() {
   document.getElementById("ai-suggestions-list").innerHTML = "";
   document.getElementById("modal-ai-recipe").style.display = "flex";
   document.getElementById("ai-recipe-prompt").focus();
-  // Preserve checkbox state across opens (user preference)
-  // Auto-fetch suggestions in background
-  suggestRecipes();
 }
 
 async function suggestRecipes() {
