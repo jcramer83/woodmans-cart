@@ -89,14 +89,54 @@ function hideActivity(barId, statusId, message, type) {
   }
 }
 
+// --- Broken image handler ---
+// On load failure or blank image from a cached bad response, retry once with cache bust.
+// If retry also fails, hide the image.
+document.addEventListener("error", (e) => {
+  const img = e.target;
+  if (img.tagName !== "IMG" || !img.src) return;
+  if (img.dataset.retried) {
+    img.style.display = "none";
+  } else {
+    img.dataset.retried = "1";
+    const sep = img.src.includes("?") ? "&" : "?";
+    img.src = img.src.replace(/([&?])_cb=\d+/, "") + sep + "_cb=" + Date.now();
+  }
+}, true);
+
+document.addEventListener("load", (e) => {
+  const img = e.target;
+  if (img.tagName !== "IMG") return;
+  if (img.naturalWidth <= 1 && img.naturalHeight <= 1) {
+    if (img.dataset.retried) {
+      img.style.display = "none";
+    } else {
+      img.dataset.retried = "1";
+      const sep = img.src.includes("?") ? "&" : "?";
+      img.src = img.src.replace(/([&?])_cb=\d+/, "") + sep + "_cb=" + Date.now();
+    }
+  }
+}, true);
+
 // --- Init ---
 
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
-  settings = (await appApi.loadSettings()) || {};
-  staples = (await appApi.loadStaples()) || [];
-  recipes = (await appApi.loadRecipes()) || [];
+  try {
+    settings = (await appApi.loadSettings()) || {};
+  } catch (e) { console.warn("Failed to load settings:", e); }
+  try {
+    staples = (await appApi.loadStaples()) || [];
+  } catch (e) { console.warn("Failed to load staples:", e); }
+  try {
+    recipes = (await appApi.loadRecipes()) || [];
+  } catch (e) { console.warn("Failed to load recipes:", e); }
+
+  // Validate loaded data (guard against API returning error objects)
+  if (!Array.isArray(staples)) staples = [];
+  if (!Array.isArray(recipes)) recipes = [];
+  if (typeof settings !== "object" || settings === null || settings.error) settings = {};
 
   // Exclude all staples from cart on launch — user clicks "Add All to Cart" to include them
   for (const s of staples) {
@@ -1445,52 +1485,58 @@ async function startCartAutomation() {
   });
 
   try {
-    await appApi.startCart({ items: cartItems, settings });
-  } catch (err) {
-    appendLog(`Error: ${err.message}`);
-  }
-
-  removeItemDoneListener();
-  progressBar.style.display = "none";
-
-  // Summary
-  const okCount = Object.values(cartItemResults).filter((s) => s === "ok").length;
-  const failCount = Object.values(cartItemResults).filter((s) => s === "fail").length;
-  const skipCount = Object.values(cartItemResults).filter((s) => s === "skip").length;
-  const summaryLine = document.getElementById("cart-status-line");
-  if (summaryLine) {
-    if (failCount > 0) {
-      summaryLine.textContent = "Done — " + okCount + " added, " + failCount + " failed, " + skipCount + " skipped";
-      summaryLine.className = "cart-status-line error";
-      showToast(failCount + " items failed to add", "error");
-    } else {
-      summaryLine.textContent = "Done — " + okCount + " added" + (skipCount > 0 ? ", " + skipCount + " skipped" : "");
-      summaryLine.className = "cart-status-line success";
-      showToast("All " + okCount + " items added!", "success");
+    try {
+      await appApi.startCart({ items: cartItems, settings });
+    } catch (err) {
+      appendLog(`Error: ${err.message}`);
     }
-  }
 
-  // Auto-disable recipes whose items were all successfully added
-  let recipesChanged = false;
-  for (const r of recipes) {
-    if (!r.enabled) continue;
-    const recipeItems = r.items || [];
-    const recipeItemIds = recipeItems.map((item) => "recipe-" + r.id + "-" + (item.item || ""));
-    const allOk = recipeItemIds.length > 0 && recipeItemIds.every((id) => cartItemResults[id] === "ok");
-    if (allOk) {
-      r.enabled = false;
-      recipesChanged = true;
+    removeItemDoneListener();
+    progressBar.style.display = "none";
+
+    // Summary
+    const okCount = Object.values(cartItemResults).filter((s) => s === "ok").length;
+    const failCount = Object.values(cartItemResults).filter((s) => s === "fail").length;
+    const skipCount = Object.values(cartItemResults).filter((s) => s === "skip").length;
+    const summaryLine = document.getElementById("cart-status-line");
+    if (summaryLine) {
+      if (failCount > 0) {
+        summaryLine.textContent = "Done — " + okCount + " added, " + failCount + " failed, " + skipCount + " skipped";
+        summaryLine.className = "cart-status-line error";
+        showToast(failCount + " items failed to add", "error");
+      } else {
+        summaryLine.textContent = "Done — " + okCount + " added" + (skipCount > 0 ? ", " + skipCount + " skipped" : "");
+        summaryLine.className = "cart-status-line success";
+        showToast("All " + okCount + " items added!", "success");
+      }
     }
-  }
-  if (recipesChanged) {
-    await appApi.saveRecipes(recipes);
-    renderRecipes();
-  }
 
-  cartRunning = false;
-  document.getElementById("btn-start-cart").style.display = "inline-flex";
-  document.getElementById("btn-stop-cart").style.display = "none";
-  renderCart();
+    // Auto-disable recipes whose items were all successfully added
+    let recipesChanged = false;
+    for (const r of recipes) {
+      if (!r.enabled) continue;
+      const recipeItems = r.items || [];
+      const recipeItemIds = recipeItems.map((item) => "recipe-" + r.id + "-" + (item.item || ""));
+      const allOk = recipeItemIds.length > 0 && recipeItemIds.every((id) => cartItemResults[id] === "ok");
+      if (allOk) {
+        r.enabled = false;
+        recipesChanged = true;
+      }
+    }
+    if (recipesChanged) {
+      try {
+        await appApi.saveRecipes(recipes);
+        renderRecipes();
+      } catch (e) {
+        console.warn("Failed to save recipe state after automation:", e);
+      }
+    }
+  } finally {
+    cartRunning = false;
+    document.getElementById("btn-start-cart").style.display = "inline-flex";
+    document.getElementById("btn-stop-cart").style.display = "none";
+    renderCart();
+  }
 }
 
 function updateProgressBar(current, total) {

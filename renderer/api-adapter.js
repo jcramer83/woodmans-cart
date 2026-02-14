@@ -43,17 +43,25 @@
   connectWebSocket();
 
   async function apiGet(path) {
-    const res = await fetch(path);
-    return res.json();
+    try {
+      const res = await fetch(path);
+      return res.json();
+    } catch (e) {
+      throw new Error("Connection lost — check that the server is running");
+    }
   }
 
   async function apiPost(path, body) {
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return res.json();
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return res.json();
+    } catch (e) {
+      throw new Error("Connection lost — check that the server is running");
+    }
   }
 
   window.appApi = {
