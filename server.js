@@ -177,10 +177,11 @@ function startServer(deps) {
   // Fetch current online cart
   app.post("/api/cart/fetch", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
     var fastWorker = require("./cart-worker-fast");
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-      await fastWorker.ensureShoppingMode(session, currentSettings.shoppingMode || "instore", sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
       var items = await fastWorker.fetchCart(session, sendProgress);
       return res.json(items);
     } catch (err) {
@@ -191,10 +192,11 @@ function startServer(deps) {
   // Remove all online cart items
   app.post("/api/cart/remove-all", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
     var fastWorker = require("./cart-worker-fast");
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-      await fastWorker.ensureShoppingMode(session, currentSettings.shoppingMode || "instore", sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
       var result = await fastWorker.removeAllCartItems(session, sendProgress);
       return res.json(result);
     } catch (err) {

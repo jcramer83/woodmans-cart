@@ -93,10 +93,10 @@
     deleteRecipeImage: function (id) { return apiPost("/api/recipe/image/delete", { recipeId: id }); },
 
     // Fetch current online cart
-    fetchCurrentCart: function () { return apiPost("/api/cart/fetch"); },
+    fetchCurrentCart: function (mode) { return apiPost("/api/cart/fetch", { shoppingMode: mode }); },
 
     // Remove all items from online cart
-    removeAllCartItems: function () { return apiPost("/api/cart/remove-all"); },
+    removeAllCartItems: function (mode) { return apiPost("/api/cart/remove-all", { shoppingMode: mode }); },
 
     // Copy cart between shopping modes
     copyCart: function (data) { return apiPost("/api/cart/copy", data); },

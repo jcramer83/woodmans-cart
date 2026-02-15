@@ -1466,7 +1466,7 @@ async function fetchOnlineCart() {
   });
 
   try {
-    const result = await appApi.fetchCurrentCart();
+    const result = await appApi.fetchCurrentCart(settings.shoppingMode || "instore");
     renderOnlineCart(result);
     if (result && result.error) {
       hideActivity("online-cart-activity", "online-cart-activity-status", "Error: " + result.error, "error");
@@ -1507,7 +1507,7 @@ async function removeAllOnlineCartItems() {
   });
 
   try {
-    const result = await appApi.removeAllCartItems();
+    const result = await appApi.removeAllCartItems(settings.shoppingMode || "instore");
     if (result && result.error) {
       appendLog("Error: " + result.error);
       hideActivity("online-cart-activity", "online-cart-activity-status", "Error: " + result.error, "error");
