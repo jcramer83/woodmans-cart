@@ -109,6 +109,7 @@
           <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button> Current Woodmans Cart <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
           <div class="section-actions">
             <button class="btn-icon" onclick="openExternalUrl('https://shopwoodmans.com/store/woodmans-food-markets/storefront')" title="Open Woodmans Store">&#128722;</button>
+            <button id="btn-copy-cart" class="btn btn-sm" title="Copy cart to other shopping mode">Copy Cart</button>
             <button id="btn-remove-all-online" class="btn btn-sm btn-danger" style="display:none;">Remove All</button>
             <button id="btn-import-cart" class="btn btn-sm">Refresh</button>
           </div>
@@ -280,6 +281,35 @@
         <button class="btn" onclick="printRecipe()">Print</button>
         <button class="btn" onclick="openRecipeExternal()">Open in Browser</button>
         <button class="btn btn-accent" data-close="modal-view-recipe">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Copy Cart Modal -->
+  <div id="modal-copy-cart" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Copy Cart</h3>
+        <button class="btn-close" data-close="modal-copy-cart">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px;">Copy all items from one shopping mode's cart to the other. Existing items in the destination will not be removed.</p>
+        <label>
+          Direction
+          <select id="copy-cart-direction">
+            <option value="instore-pickup">In-Store &rarr; Pickup</option>
+            <option value="pickup-instore">Pickup &rarr; In-Store</option>
+          </select>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="copy-cart-clear-source" />
+          Clear source cart after copying
+        </label>
+        <div id="copy-cart-status" class="ai-status" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-close="modal-copy-cart">Cancel</button>
+        <button id="btn-copy-cart-confirm" class="btn btn-accent">Copy Cart</button>
       </div>
     </div>
   </div>

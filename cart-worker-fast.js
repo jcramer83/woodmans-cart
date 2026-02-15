@@ -785,6 +785,48 @@ async function removeAllCartItems(session, progressCallback) {
   return await removeAllCartItemsViaRest(session, progressCallback);
 }
 
+async function copyCart(session, fromMode, toMode, clearSource, progressCallback) {
+  const progress = progressCallback || (() => {});
+
+  // 1. Switch to source mode, fetch raw cart items (need v4_item_ids + quantities)
+  await ensureShoppingMode(session, fromMode, progress);
+  progress("Fetching " + (fromMode === "pickup" ? "Pickup" : "In-Store") + " cart...");
+  const fetchRes = await withRetry(() => v3Get(session.cookies, `/v3/carts/${session.cartId}`));
+  if (fetchRes.status === 401 || fetchRes.status === 403) { closeFastSession(); throw new Error("Session expired"); }
+  const rawItems = fetchRes.body?.cart?.items || [];
+  if (rawItems.length === 0) { progress("Source cart is empty."); return { copied: 0, cleared: false }; }
+
+  // 2. Build add-updates from source items
+  const sourceUpdates = rawItems
+    .filter(ci => ci.v4_item_id)
+    .map(ci => ({ itemId: ci.v4_item_id, quantity: ci.quantity || 1, quantityType: "each", trackingParams: {} }));
+  if (sourceUpdates.length === 0) { progress("No copyable items found."); return { copied: 0, cleared: false }; }
+
+  // 3. Switch to destination mode, batch-add items
+  await ensureShoppingMode(session, toMode, progress);
+  const cartType = (toMode === "pickup") ? "grocery" : "list";
+  progress("Adding " + sourceUpdates.length + " item(s) to " + (toMode === "pickup" ? "Pickup" : "In-Store") + " cart...");
+  const addRes = await withRetry(() => gqlPost(session.cookies, {
+    operationName: "UpdateCartItemsMutation",
+    variables: { cartItemUpdates: sourceUpdates, cartType, requestTimestamp: Date.now(), cartId: session.cartId },
+    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
+  }));
+  if (isSessionExpired(addRes)) { closeFastSession(); throw new Error("Session expired"); }
+
+  // 4. Optionally clear source cart
+  let cleared = false;
+  if (clearSource) {
+    await ensureShoppingMode(session, fromMode, progress);
+    await removeAllCartItemsViaRest(session, progress);
+    cleared = true;
+  }
+
+  // 5. End on destination mode
+  await ensureShoppingMode(session, toMode, progress);
+  progress("Done! Copied " + sourceUpdates.length + " item(s)" + (cleared ? " and cleared source cart" : "") + ".");
+  return { copied: sourceUpdates.length, cleared };
+}
+
 module.exports = {
   getFastSession,
   closeFastSession,
@@ -793,5 +835,6 @@ module.exports = {
   searchAndAddAll,
   fetchCart,
   removeAllCartItems,
+  copyCart,
   sleep,
 };

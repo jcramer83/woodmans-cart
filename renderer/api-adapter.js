@@ -98,6 +98,9 @@
     // Remove all items from online cart
     removeAllCartItems: function () { return apiPost("/api/cart/remove-all"); },
 
+    // Copy cart between shopping modes
+    copyCart: function (data) { return apiPost("/api/cart/copy", data); },
+
     // Open URL in new tab (web browser)
     openExternal: function (url) { window.open(url, "_blank"); return Promise.resolve(); },
 

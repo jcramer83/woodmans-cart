@@ -185,7 +185,10 @@ function bindEvents() {
   document.getElementById("btn-ai-generate").addEventListener("click", searchAiRecipeOptions);
   document.getElementById("btn-ai-suggest").addEventListener("click", suggestRecipes);
   document.getElementById("ai-recipe-prompt").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && e.target.value.trim()) searchAiRecipeOptions();
+    if (e.key === "Enter" && e.target.value.trim() && !searchingOptions && !aiGenerating) {
+      e.preventDefault();
+      searchAiRecipeOptions();
+    }
   });
   document.getElementById("ai-recipe-prompt").addEventListener("input", (e) => {
     document.getElementById("btn-ai-generate").disabled = !e.target.value.trim();
@@ -202,6 +205,8 @@ function bindEvents() {
   // Online cart viewer
   document.getElementById("btn-import-cart").addEventListener("click", fetchOnlineCart);
   document.getElementById("btn-remove-all-online").addEventListener("click", removeAllOnlineCartItems);
+  document.getElementById("btn-copy-cart").addEventListener("click", openCopyCartModal);
+  document.getElementById("btn-copy-cart-confirm").addEventListener("click", executeCopyCart);
 
   // Clear cart
   document.getElementById("btn-clear-cart").addEventListener("click", clearCart);
@@ -958,10 +963,13 @@ function selectSuggestion(index) {
   document.getElementById("ai-recipe-prompt").focus();
 }
 
+let searchingOptions = false;
+
 async function searchAiRecipeOptions() {
-  if (aiGenerating) return;
+  if (aiGenerating || searchingOptions) return;
   const prompt = document.getElementById("ai-recipe-prompt").value.trim();
   if (!prompt) return;
+  searchingOptions = true;
 
   const suggestionsEl = document.getElementById("ai-suggestions");
   const listEl = document.getElementById("ai-suggestions-list");
@@ -1001,6 +1009,7 @@ async function searchAiRecipeOptions() {
   } catch (err) {
     listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load options.</span>';
   } finally {
+    searchingOptions = false;
     btn.disabled = false;
   }
 }
@@ -1009,6 +1018,9 @@ function generateFromOption(index) {
   if (aiGenerating) return;
   const options = window._aiRecipeOptions;
   if (!options || !options[index]) return;
+  // Immediately disable all chips to prevent any double-click/concurrent click
+  var suggestList = document.getElementById("ai-suggestions-list");
+  if (suggestList) suggestList.style.pointerEvents = "none";
   document.getElementById("ai-recipe-prompt").value = options[index].name;
   // Highlight selected
   document.querySelectorAll("#ai-suggestions-list .ai-suggestion-chip").forEach((chip, i) => {
@@ -1109,9 +1121,13 @@ async function generateAiRecipe() {
     statusEl.className = "ai-status error";
   } finally {
     aiGenerating = false;
-    btn.disabled = false;
-    const suggestList = document.getElementById("ai-suggestions-list");
-    if (suggestList) suggestList.style.pointerEvents = "";
+    // Only re-enable controls if the modal is still open (error case).
+    // On success the modal is closed, so leave chips disabled to prevent stale clicks.
+    if (isModalOpen("modal-ai-recipe")) {
+      btn.disabled = false;
+      const suggestList = document.getElementById("ai-suggestions-list");
+      if (suggestList) suggestList.style.pointerEvents = "";
+    }
   }
 }
 
@@ -1509,6 +1525,69 @@ async function removeAllOnlineCartItems() {
   }
 }
 
+// --- Copy Cart Between Modes ---
+
+function openCopyCartModal() {
+  if (cartRunning) {
+    showToast("Cart automation is running. Please wait.", "error");
+    return;
+  }
+  // Pre-select direction based on current mode
+  const dirSelect = document.getElementById("copy-cart-direction");
+  dirSelect.value = (settings.shoppingMode === "pickup") ? "pickup-instore" : "instore-pickup";
+  document.getElementById("copy-cart-clear-source").checked = false;
+  const statusEl = document.getElementById("copy-cart-status");
+  statusEl.style.display = "none";
+  statusEl.textContent = "";
+  statusEl.className = "ai-status";
+  document.getElementById("btn-copy-cart-confirm").disabled = false;
+  showModal("modal-copy-cart");
+}
+
+async function executeCopyCart() {
+  const dirValue = document.getElementById("copy-cart-direction").value;
+  const parts = dirValue.split("-");
+  const fromMode = parts[0];
+  const toMode = parts[1];
+  const clearSource = document.getElementById("copy-cart-clear-source").checked;
+  const statusEl = document.getElementById("copy-cart-status");
+  const confirmBtn = document.getElementById("btn-copy-cart-confirm");
+
+  statusEl.style.display = "block";
+  statusEl.textContent = "Starting...";
+  statusEl.className = "ai-status loading";
+  confirmBtn.disabled = true;
+
+  // Listen for progress messages
+  if (removeProgressListener) removeProgressListener();
+  removeProgressListener = appApi.onCartProgress((message) => {
+    statusEl.textContent = message;
+  });
+
+  try {
+    const result = await appApi.copyCart({ fromMode, toMode, clearSource });
+    if (result && result.error) {
+      statusEl.textContent = "Error: " + result.error;
+      statusEl.className = "ai-status error";
+    } else {
+      statusEl.textContent = "Copied " + (result.copied || 0) + " item(s)" + (result.cleared ? " and cleared source cart" : "") + "!";
+      statusEl.className = "ai-status success";
+      // Update settings to reflect destination mode
+      settings.shoppingMode = toMode;
+      await appApi.saveSettings(settings);
+      updateModeBadge();
+      showToast("Copied " + (result.copied || 0) + " items to " + (toMode === "pickup" ? "Pickup" : "In-Store") + " cart", "success");
+      // Auto-close after short delay
+      setTimeout(() => hideModal("modal-copy-cart"), 1500);
+    }
+  } catch (err) {
+    statusEl.textContent = "Error: " + err.message;
+    statusEl.className = "ai-status error";
+  } finally {
+    confirmBtn.disabled = false;
+  }
+}
+
 // --- Cart Automation ---
 
 async function startCartAutomation() {
@@ -1781,3 +1860,5 @@ window.dragOverItem = dragOverItem;
 window.dragLeaveItem = dragLeaveItem;
 window.dropItem = dropItem;
 window.dragEndItem = dragEndItem;
+window.openCopyCartModal = openCopyCartModal;
+window.executeCopyCart = executeCopyCart;

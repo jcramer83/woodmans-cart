@@ -202,6 +202,27 @@ function startServer(deps) {
     }
   });
 
+  // Copy cart between shopping modes
+  app.post("/api/cart/copy", async function (req, res) {
+    var { fromMode, toMode, clearSource } = req.body;
+    if (!fromMode || !toMode || fromMode === toMode) return res.json({ error: "Invalid mode parameters" });
+    if (!["instore", "pickup"].includes(fromMode) || !["instore", "pickup"].includes(toMode)) return res.json({ error: "Mode must be 'instore' or 'pickup'" });
+
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var fastWorker = require("./cart-worker-fast");
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      var result = await fastWorker.copyCart(session, fromMode, toMode, !!clearSource, sendProgress);
+      // Fetch destination cart for UI update
+      var cartItems = await fastWorker.fetchCart(session, sendProgress);
+      if (cartItems && Array.isArray(cartItems)) sendOnlineUpdate(cartItems);
+      return res.json(result);
+    } catch (err) {
+      sendProgress("Error: " + err.message);
+      return res.json({ error: err.message });
+    }
+  });
+
   // AI recipe generation
   app.post("/api/recipe/generate", async function (req, res) {
     const { prompt, servings, glutenFree, dairyFree, preferOrganic, pickyEater } = req.body;
