@@ -959,6 +959,7 @@ function selectSuggestion(index) {
 }
 
 async function searchAiRecipeOptions() {
+  if (aiGenerating) return;
   const prompt = document.getElementById("ai-recipe-prompt").value.trim();
   if (!prompt) return;
 
@@ -1005,6 +1006,7 @@ async function searchAiRecipeOptions() {
 }
 
 function generateFromOption(index) {
+  if (aiGenerating) return;
   const options = window._aiRecipeOptions;
   if (!options || !options[index]) return;
   document.getElementById("ai-recipe-prompt").value = options[index].name;
@@ -1015,9 +1017,13 @@ function generateFromOption(index) {
   generateAiRecipe();
 }
 
+let aiGenerating = false;
+
 async function generateAiRecipe() {
+  if (aiGenerating) return;
   const prompt = document.getElementById("ai-recipe-prompt").value.trim();
   if (!prompt) return;
+  aiGenerating = true;
 
   const servings = parseInt(document.getElementById("ai-recipe-servings").value) || 4;
   const glutenFree = document.getElementById("ai-gluten-free").checked;
@@ -1031,6 +1037,9 @@ async function generateAiRecipe() {
   statusEl.innerHTML = '<div class="ai-loading-animation"><img class="ai-loading-img" src="/assets/cooking-loading.png" alt="" /><span>Cooking up your recipe...</span></div>';
   statusEl.className = "ai-status loading";
   btn.disabled = true;
+  // Disable suggestion chips during generation
+  const suggestList = document.getElementById("ai-suggestions-list");
+  if (suggestList) suggestList.style.pointerEvents = "none";
   // Scroll status into view on mobile where it may be off-screen
   statusEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
@@ -1099,7 +1108,10 @@ async function generateAiRecipe() {
     statusEl.textContent = "Error: " + err.message;
     statusEl.className = "ai-status error";
   } finally {
+    aiGenerating = false;
     btn.disabled = false;
+    const suggestList = document.getElementById("ai-suggestions-list");
+    if (suggestList) suggestList.style.pointerEvents = "";
   }
 }
 
