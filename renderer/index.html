@@ -33,11 +33,12 @@
       <!-- Staples section -->
       <section class="section">
         <div class="section-header">
-          <h2>Weekly Staples</h2>
+          <h2><button class="collapse-btn" onclick="toggleSection('staples')" title="Collapse">&#9660;</button> Weekly Staples</h2>
           <div class="section-actions">
             <button id="btn-add-all-staples" class="btn btn-sm">Add All to Cart</button>
           </div>
         </div>
+        <div id="section-staples" class="section-collapsible">
         <div id="staples-list" class="item-list">
           <p class="empty-state">No staples yet. Search below to add items.</p>
         </div>
@@ -46,19 +47,22 @@
           <button id="btn-staple-search" class="btn btn-sm btn-accent">&#128269;</button>
         </div>
         <div id="staple-search-results" class="product-results" style="display:none;"></div>
+        </div>
       </section>
 
       <!-- Recipes section -->
       <section class="section">
         <div class="section-header">
-          <h2>Recipes</h2>
+          <h2><button class="collapse-btn" onclick="toggleSection('recipes')" title="Collapse">&#9660;</button> Recipes</h2>
           <div class="section-actions">
             <button id="btn-add-recipe" class="btn btn-sm" title="Create recipe manually">+ Manual</button>
             <button id="btn-ai-recipe" class="btn btn-sm btn-accent" title="Generate recipe with AI">AI Recipe</button>
           </div>
         </div>
+        <div id="section-recipes" class="section-collapsible">
         <div id="recipes-list" class="item-list">
           <p class="empty-state">No recipes yet. Click "AI Recipe" to get started.</p>
+        </div>
         </div>
       </section>
     </div>
@@ -102,17 +106,19 @@
       <!-- Current Woodmans Online Cart section -->
       <section class="section">
         <div class="section-header">
-          <h2>Current Woodmans Cart <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
+          <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button> Current Woodmans Cart <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
           <div class="section-actions">
             <button class="btn-icon" onclick="openExternalUrl('https://shopwoodmans.com/store/woodmans-food-markets/storefront')" title="Open Woodmans Store">&#128722;</button>
             <button id="btn-remove-all-online" class="btn btn-sm btn-danger" style="display:none;">Remove All</button>
             <button id="btn-import-cart" class="btn btn-sm">Refresh</button>
           </div>
         </div>
+        <div id="section-online-cart" class="section-collapsible">
         <div id="online-cart-activity" class="activity-bar"><div class="activity-bar-fill"></div></div>
         <div id="online-cart-activity-status" class="activity-status"></div>
         <div id="online-cart-list" class="item-list">
           <p class="empty-state">Click "Refresh" to load your current Woodmans online cart.</p>
+        </div>
         </div>
       </section>
     </div>

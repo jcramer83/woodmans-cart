@@ -123,6 +123,10 @@ document.addEventListener("load", (e) => {
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
+  // Show loading skeletons while data loads
+  document.getElementById("staples-list").innerHTML = skeletonHTML(3);
+  document.getElementById("recipes-list").innerHTML = skeletonHTML(3);
+
   try {
     settings = (await appApi.loadSettings()) || {};
   } catch (e) { console.warn("Failed to load settings:", e); }
@@ -144,6 +148,7 @@ async function init() {
   }
 
   initDarkMode();
+  restoreCollapsedSections();
   renderStaples();
   renderRecipes();
   renderCart();
@@ -277,6 +282,25 @@ function bindEvents() {
     }
   });
 
+  // Click-outside dismissal for search results
+  document.addEventListener("click", (e) => {
+    // Staple search: dismiss if click is outside the search row and results
+    const stapleSearchRow = document.querySelector(".left-col .staple-search-row");
+    const stapleResults = document.getElementById("staple-search-results");
+    if (stapleResults && stapleResults.style.display !== "none") {
+      if (!e.target.closest(".left-col .staple-search-row") && !e.target.closest("#staple-search-results")) {
+        stapleResults.style.display = "none";
+      }
+    }
+    // Manual search: dismiss if click is outside the search row and results
+    const manualResults = document.getElementById("manual-search-results");
+    if (manualResults && manualResults.style.display !== "none") {
+      if (!e.target.closest(".right-col .staple-search-row") && !e.target.closest("#manual-search-results")) {
+        manualResults.style.display = "none";
+      }
+    }
+  });
+
 }
 
 // --- Settings ---
@@ -312,6 +336,31 @@ function initDarkMode() {
   }
 }
 
+// --- Collapsible Sections ---
+
+function toggleSection(sectionId) {
+  const content = document.getElementById("section-" + sectionId);
+  const btn = content ? content.closest(".section").querySelector(".collapse-btn") : null;
+  if (!content) return;
+  content.classList.toggle("collapsed");
+  if (btn) btn.classList.toggle("collapsed");
+  // Persist state
+  const collapsed = JSON.parse(localStorage.getItem("collapsedSections") || "{}");
+  collapsed[sectionId] = content.classList.contains("collapsed");
+  localStorage.setItem("collapsedSections", JSON.stringify(collapsed));
+}
+
+function restoreCollapsedSections() {
+  const collapsed = JSON.parse(localStorage.getItem("collapsedSections") || "{}");
+  for (const [sectionId, isCollapsed] of Object.entries(collapsed)) {
+    if (!isCollapsed) continue;
+    const content = document.getElementById("section-" + sectionId);
+    const btn = content ? content.closest(".section").querySelector(".collapse-btn") : null;
+    if (content) content.classList.add("collapsed");
+    if (btn) btn.classList.add("collapsed");
+  }
+}
+
 // --- Staples ---
 
 function renderStaples() {
@@ -323,14 +372,18 @@ function renderStaples() {
 
   list.innerHTML = staples
     .map(
-      (s) => `
-    <div class="item-row" data-id="${s.id}">
+      (s, i) => `
+    <div class="item-row" data-id="${s.id}" draggable="true" ondragstart="dragStartItem(event,'staple',${i})" ondragover="dragOverItem(event)" ondragleave="dragLeaveItem(event)" ondrop="dropItem(event,'staple',${i})" ondragend="dragEndItem(event)">
       ${s.image ? `<img class="item-thumb" src="${esc(s.image)}" alt="">` : ""}
       <div class="item-info">
         <div class="item-name">${esc(s.productName || s.item)}</div>
         <div class="item-detail">${s.price ? esc(s.price) : ""}${s.note ? (s.price ? " - " : "") + esc(s.note) : ""}</div>
       </div>
-      <span class="item-qty">x${s.quantity || 1}</span>
+      <div class="item-qty-controls">
+        <button class="qty-btn" onclick="changeStapleQty('${s.id}', -1)" title="Decrease">&#8722;</button>
+        <span class="item-qty-val">${s.quantity || 1}</span>
+        <button class="qty-btn" onclick="changeStapleQty('${s.id}', 1)" title="Increase">&#43;</button>
+      </div>
       <div class="item-actions">
         <button onclick="openStapleModal('${s.id}')" title="Edit">&#9998;</button>
         <button class="btn-del" onclick="deleteStaple('${s.id}')" title="Delete">&#10005;</button>
@@ -375,6 +428,15 @@ async function deleteStaple(id) {
   renderStaples();
   renderCart();
   showToast("Staple removed");
+}
+
+async function changeStapleQty(id, delta) {
+  const s = staples.find((x) => x.id === id);
+  if (!s) return;
+  s.quantity = Math.max(1, (s.quantity || 1) + delta);
+  await appApi.saveStaples(staples);
+  renderStaples();
+  renderCart();
 }
 
 function addAllStaplesToCart() {
@@ -470,8 +532,8 @@ function renderRecipes() {
 
   list.innerHTML = recipes
     .map(
-      (r) => `
-    <div class="item-row" data-id="${r.id}">
+      (r, i) => `
+    <div class="item-row" data-id="${r.id}" draggable="true" ondragstart="dragStartItem(event,'recipe',${i})" ondragover="dragOverItem(event)" ondragleave="dragLeaveItem(event)" ondrop="dropItem(event,'recipe',${i})" ondragend="dragEndItem(event)">
       <label class="toggle">
         <input type="checkbox" ${r.enabled ? "checked" : ""} onchange="toggleRecipe('${r.id}', this.checked)" />
         <span class="toggle-slider"></span>
@@ -1125,7 +1187,7 @@ function renderCart() {
   for (const item of items) {
     const price = parsePrice(item.price);
     if (price > 0) {
-      total += price;
+      total += price * (item.quantity || 1);
       hasEstimate = true;
     }
   }
@@ -1331,7 +1393,7 @@ function renderOnlineCart(result) {
   for (const item of result) {
     const price = parsePrice(item.price);
     if (price > 0) {
-      total += price;
+      total += price * (item.quantity || 1);
     }
   }
 
@@ -1601,6 +1663,58 @@ function appendLog(message) {
   }
 }
 
+// --- Drag-to-Reorder ---
+
+function dragStartItem(e, type, index) {
+  e.dataTransfer.setData("text/plain", JSON.stringify({ type, index }));
+  e.dataTransfer.effectAllowed = "move";
+  e.target.closest(".item-row").style.opacity = "0.5";
+}
+
+function dragOverItem(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const row = e.target.closest(".item-row");
+  if (row) row.classList.add("drag-over");
+}
+
+function dragLeaveItem(e) {
+  const row = e.target.closest(".item-row");
+  if (row) row.classList.remove("drag-over");
+}
+
+function dropItem(e, type, index) {
+  e.preventDefault();
+  const row = e.target.closest(".item-row");
+  if (row) row.classList.remove("drag-over");
+
+  let data;
+  try { data = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
+  if (data.type !== type) return;
+
+  const fromIndex = data.index;
+  if (fromIndex === index) return;
+
+  const arr = type === "staple" ? staples : recipes;
+  const [moved] = arr.splice(fromIndex, 1);
+  arr.splice(index, 0, moved);
+
+  if (type === "staple") {
+    appApi.saveStaples(staples);
+    renderStaples();
+    renderCart();
+  } else {
+    appApi.saveRecipes(recipes);
+    renderRecipes();
+    renderCart();
+  }
+}
+
+function dragEndItem(e) {
+  e.target.closest(".item-row").style.opacity = "";
+  document.querySelectorAll(".item-row.drag-over").forEach((r) => r.classList.remove("drag-over"));
+}
+
 // --- Helpers ---
 
 function generateId() {
@@ -1629,6 +1743,7 @@ function openExternalUrl(url) {
 window.openExternalUrl = openExternalUrl;
 window.openStapleModal = openStapleModal;
 window.deleteStaple = deleteStaple;
+window.changeStapleQty = changeStapleQty;
 window.selectStapleSearchResult = selectStapleSearchResult;
 window.openRecipeModal = openRecipeModal;
 window.deleteRecipe = deleteRecipe;
@@ -1648,3 +1763,9 @@ window.printRecipe = printRecipe;
 window.openRecipeExternal = openRecipeExternal;
 window.toggleShoppingMode = toggleShoppingMode;
 window.toggleDarkMode = toggleDarkMode;
+window.toggleSection = toggleSection;
+window.dragStartItem = dragStartItem;
+window.dragOverItem = dragOverItem;
+window.dragLeaveItem = dragLeaveItem;
+window.dropItem = dropItem;
+window.dragEndItem = dragEndItem;
