@@ -136,10 +136,14 @@ async function init() {
   try {
     recipes = (await appApi.loadRecipes()) || [];
   } catch (e) { console.warn("Failed to load recipes:", e); }
+  try {
+    manualItems = (await appApi.loadManualItems()) || [];
+  } catch (e) { console.warn("Failed to load manual items:", e); }
 
   // Validate loaded data (guard against API returning error objects)
   if (!Array.isArray(staples)) staples = [];
   if (!Array.isArray(recipes)) recipes = [];
+  if (!Array.isArray(manualItems)) manualItems = [];
   if (typeof settings !== "object" || settings === null || settings.error) settings = {};
 
   // Exclude all staples from cart on launch — user clicks "Add All to Cart" to include them
@@ -158,6 +162,12 @@ async function init() {
   // Listen for online cart updates pushed after automation completes
   appApi.onOnlineCartUpdate((items) => {
     renderOnlineCart(items);
+  });
+
+  // Listen for manual items updates from other clients (e.g. API)
+  appApi.onManualItemsUpdate((items) => {
+    manualItems = items || [];
+    renderCart();
   });
 
 }
@@ -1264,6 +1274,7 @@ function renderCart() {
 function removeManualItem(id) {
   const realId = id.replace("manual-", "");
   manualItems = manualItems.filter((m) => m.id !== realId);
+  appApi.removeManualItem(realId);
   renderCart();
 }
 
@@ -1276,6 +1287,7 @@ function clearCart() {
     excludedCartIds.add(item.id);
   }
   manualItems = [];
+  appApi.clearManualItems();
   renderCart();
 }
 
@@ -1318,6 +1330,7 @@ function changeCartQty(id, delta) {
     const m = manualItems.find((x) => x.id === realId);
     if (m) {
       m.quantity = Math.max(1, (m.quantity || 1) + delta);
+      appApi.updateManualItem(realId, { quantity: m.quantity });
       renderCart();
     }
   }
@@ -1368,18 +1381,20 @@ async function doManualSearch() {
   }
 }
 
-function selectManualProduct(index) {
+async function selectManualProduct(index) {
   const products = window._manualSearchResults;
   if (!products || !products[index]) return;
 
   const p = products[index];
-  manualItems.push({
-    id: generateId(),
+  const newItem = await appApi.addManualItem({
     item: p.name,
     quantity: 1,
     price: p.price || "",
     image: p.image || "",
   });
+  if (newItem && newItem.id) {
+    manualItems.push(newItem);
+  }
 
   renderCart();
   showToast("Added " + p.name + " to cart", "success");

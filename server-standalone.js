@@ -8,6 +8,7 @@ const DATA_DIR = path.join(__dirname, "data");
 const SETTINGS_PATH = path.join(DATA_DIR, "settings.json");
 const STAPLES_PATH = path.join(DATA_DIR, "staples.json");
 const RECIPES_PATH = path.join(DATA_DIR, "recipes.json");
+const MANUAL_ITEMS_PATH = path.join(DATA_DIR, "manual-items.json");
 
 function ensureDataFiles() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -25,6 +26,7 @@ function ensureDataFiles() {
     },
     [STAPLES_PATH]: [],
     [RECIPES_PATH]: [],
+    [MANUAL_ITEMS_PATH]: [],
   };
   for (const [filePath, defaultData] of Object.entries(defaults)) {
     if (!fs.existsSync(filePath)) {
@@ -68,6 +70,7 @@ startServer({
   SETTINGS_PATH,
   STAPLES_PATH,
   RECIPES_PATH,
+  MANUAL_ITEMS_PATH,
 });
 
 console.log("Woodmans Cart standalone server starting...");

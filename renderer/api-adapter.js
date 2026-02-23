@@ -4,7 +4,7 @@
   // WebSocket connection with auto-reconnect
   let ws = null;
   let wsReady = false;
-  const wsListeners = { progress: [], itemDone: [], onlineUpdate: [] };
+  const wsListeners = { progress: [], itemDone: [], onlineUpdate: [], manualItemsUpdate: [] };
 
   function connectWebSocket() {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -23,6 +23,8 @@
           wsListeners.itemDone.forEach(function (cb) { cb(msg.data); });
         } else if (msg.type === "online-update") {
           wsListeners.onlineUpdate.forEach(function (cb) { cb(msg.items); });
+        } else if (msg.type === "manual-items-update") {
+          wsListeners.manualItemsUpdate.forEach(function (cb) { cb(msg.items); });
         }
       } catch (e) {
         // ignore parse errors
@@ -101,6 +103,13 @@
     // Copy cart between shopping modes
     copyCart: function (data) { return apiPost("/api/cart/copy", data); },
 
+    // Manual cart items
+    loadManualItems: function () { return apiGet("/api/cart/manual"); },
+    addManualItem: function (item) { return apiPost("/api/cart/manual/add", item); },
+    removeManualItem: function (id) { return fetch("/api/cart/manual/" + id, { method: "DELETE" }).then(function (r) { return r.json(); }); },
+    updateManualItem: function (id, data) { return fetch("/api/cart/manual/" + id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }).then(function (r) { return r.json(); }); },
+    clearManualItems: function () { return apiPost("/api/cart/manual/clear"); },
+
     // Open URL in new tab (web browser)
     openExternal: function (url) { window.open(url, "_blank"); return Promise.resolve(); },
 
@@ -119,6 +128,15 @@
       return function () {
         var idx = wsListeners.itemDone.indexOf(callback);
         if (idx !== -1) wsListeners.itemDone.splice(idx, 1);
+      };
+    },
+
+    // Manual items update listener (from other clients / API)
+    onManualItemsUpdate: function (callback) {
+      wsListeners.manualItemsUpdate.push(callback);
+      return function () {
+        var idx = wsListeners.manualItemsUpdate.indexOf(callback);
+        if (idx !== -1) wsListeners.manualItemsUpdate.splice(idx, 1);
       };
     },
 

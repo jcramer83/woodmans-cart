@@ -56,8 +56,8 @@ Direct GraphQL API calls against ShopWoodmans.com (an Instacart white-label). Lo
 ### AI Integration
 
 Uses raw HTTPS requests to `api.anthropic.com` (no SDK). Two models:
-- **Recipe generation** (`/api/recipe/generate`): Claude Sonnet 4.5 — full recipe with ingredients, instructions, and search-optimized item names
-- **Recipe suggestions** (`/api/recipe/suggest`): Claude Haiku 4.5 — quick recipe idea brainstorming
+- **Recipe generation** (`/api/recipe/generate`): Claude Opus 4.6 — full recipe with ingredients, instructions, and search-optimized item names
+- **Recipe suggestions** (`/api/recipe/suggest`): Claude Sonnet 4.5 — quick recipe idea brainstorming
 
 Dietary flags (gluten-free, dairy-free, organic, picky-eater) are injected into prompts.
 

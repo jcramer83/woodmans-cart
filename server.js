@@ -9,7 +9,7 @@ const fs = require("fs");
 const PORT = 3456;
 
 function startServer(deps) {
-  const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, RECIPES_PATH } = deps;
+  const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, RECIPES_PATH, MANUAL_ITEMS_PATH } = deps;
 
   const app = express();
   app.use(express.json());
@@ -90,6 +90,51 @@ function startServer(deps) {
   app.post("/api/recipes", function (req, res) {
     writeJSON(RECIPES_PATH, req.body);
     res.json({ ok: true });
+  });
+
+  // Manual cart items
+  app.get("/api/cart/manual", function (req, res) {
+    res.json(readJSON(MANUAL_ITEMS_PATH) || []);
+  });
+
+  app.post("/api/cart/manual/add", function (req, res) {
+    var items = readJSON(MANUAL_ITEMS_PATH) || [];
+    var newItem = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      item: req.body.item || "",
+      quantity: req.body.quantity || 1,
+      price: req.body.price || "",
+      image: req.body.image || "",
+    };
+    items.push(newItem);
+    writeJSON(MANUAL_ITEMS_PATH, items);
+    broadcast({ type: "manual-items-update", items: items });
+    res.json(newItem);
+  });
+
+  app.delete("/api/cart/manual/:id", function (req, res) {
+    var items = readJSON(MANUAL_ITEMS_PATH) || [];
+    items = items.filter(function (m) { return m.id !== req.params.id; });
+    writeJSON(MANUAL_ITEMS_PATH, items);
+    broadcast({ type: "manual-items-update", items: items });
+    res.json({ ok: true });
+  });
+
+  app.post("/api/cart/manual/clear", function (req, res) {
+    writeJSON(MANUAL_ITEMS_PATH, []);
+    broadcast({ type: "manual-items-update", items: [] });
+    res.json({ ok: true });
+  });
+
+  app.patch("/api/cart/manual/:id", function (req, res) {
+    var items = readJSON(MANUAL_ITEMS_PATH) || [];
+    var item = items.find(function (m) { return m.id === req.params.id; });
+    if (!item) return res.json({ error: "Item not found" });
+    if (req.body.quantity !== undefined) item.quantity = req.body.quantity;
+    if (req.body.item !== undefined) item.item = req.body.item;
+    writeJSON(MANUAL_ITEMS_PATH, items);
+    broadcast({ type: "manual-items-update", items: items });
+    res.json(item);
   });
 
   // Product search
@@ -256,7 +301,7 @@ function startServer(deps) {
     const userMessage = "Generate a recipe for: " + prompt + "\nServings: " + servings;
 
     const body = JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-opus-4-6",
       max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
@@ -340,7 +385,7 @@ function startServer(deps) {
     }
 
     const body = JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-sonnet-4-5-20250929",
       max_tokens: 1024,
       system: "You suggest dinner recipe ideas. Return ONLY valid JSON, no other text.",
       messages: [{
