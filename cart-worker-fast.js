@@ -835,6 +835,7 @@ async function fetchServiceChooser(session, progressCallback) {
   const progress = progressCallback || (() => {});
   progress("Fetching service options...");
   const res = await withRetry(() => v3Get(session.cookies, "/v3/module_data/servicechooser?ngc_path=checkout"));
+  if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
   if (res.status !== 200) throw new Error("Failed to fetch service options (status " + res.status + ")");
   return res.body?.module_data || res.body;
 }
@@ -843,6 +844,7 @@ async function fetchDeliveryOptions(session, progressCallback) {
   const progress = progressCallback || (() => {});
   progress("Fetching delivery/pickup options...");
   const res = await withRetry(() => v3Get(session.cookies, "/v3/retailers/" + RETAILER_ID + "/delivery_options"));
+  if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
   if (res.status !== 200) throw new Error("Failed to fetch delivery options (status " + res.status + ")");
   return res.body?.service_options || res.body;
 }
@@ -851,6 +853,10 @@ async function fetchCheckoutContainer(session, progressCallback) {
   const progress = progressCallback || (() => {});
   progress("Fetching checkout data...");
   const res = await withRetry(() => v3Get(session.cookies, "/v3/containers/checkout"));
+  if (isSessionExpired(res)) {
+    closeFastSession();
+    throw new Error("Session expired");
+  }
   if (res.status !== 200) throw new Error("Failed to fetch checkout (status " + res.status + ")");
   return res.body?.container || res.body;
 }

@@ -562,6 +562,18 @@ function startServer(deps) {
       var preview = await fastWorker.fetchCheckoutPreview(session, sendProgress);
       return res.json(preview);
     } catch (err) {
+      // Retry once with fresh session if session expired
+      if (/session expired/i.test(err.message)) {
+        try {
+          sendProgress("Session expired, re-authenticating...");
+          var session2 = await fastWorker.getFastSession(currentSettings, sendProgress);
+          await fastWorker.ensureShoppingMode(session2, mode, sendProgress);
+          var preview2 = await fastWorker.fetchCheckoutPreview(session2, sendProgress);
+          return res.json(preview2);
+        } catch (err2) {
+          return res.json({ error: err2.message });
+        }
+      }
       return res.json({ error: err.message });
     }
   });
@@ -577,6 +589,16 @@ function startServer(deps) {
       var options = await fastWorker.fetchDeliveryOptions(session, sendProgress);
       return res.json(options);
     } catch (err) {
+      if (/session expired/i.test(err.message)) {
+        try {
+          var session2 = await fastWorker.getFastSession(currentSettings, sendProgress);
+          await fastWorker.ensureShoppingMode(session2, mode, sendProgress);
+          var options2 = await fastWorker.fetchDeliveryOptions(session2, sendProgress);
+          return res.json(options2);
+        } catch (err2) {
+          return res.json({ error: err2.message });
+        }
+      }
       return res.json({ error: err.message });
     }
   });
