@@ -113,7 +113,12 @@ a.btn-icon { text-decoration: none; }
   min-width: 0;
 }
 
-.left-col .section {
+.left-col .section:first-child {
+  flex: 3;
+  min-height: 0;
+}
+
+.left-col .section:last-child {
   flex: 1;
   min-height: 0;
 }
@@ -410,10 +415,10 @@ a.btn-icon { text-decoration: none; }
 .staple-search-row input { flex: 1; }
 
 #staple-search-results {
-  max-height: 400px;
   overflow-y: auto;
   margin-top: 8px;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Staple edit modal product display */

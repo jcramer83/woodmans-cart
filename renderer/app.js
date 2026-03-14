@@ -400,6 +400,7 @@ function renderStaples() {
         <button class="qty-btn" onclick="changeStapleQty('${s.id}', 1)" title="Increase">&#43;</button>
       </div>
       <div class="item-actions">
+        <button onclick="addSingleStapleToCart('${s.id}')" title="Add to cart">&#128722;</button>
         <button onclick="openStapleModal('${s.id}')" title="Edit">&#9998;</button>
         <button class="btn-del" onclick="deleteStaple('${s.id}')" title="Delete">&#10005;</button>
       </div>
@@ -461,6 +462,13 @@ function addAllStaplesToCart() {
   }
   renderCart();
   if (staples.length > 0) showToast("Added " + staples.length + " staples to cart", "success");
+}
+
+function addSingleStapleToCart(id) {
+  excludedCartIds.delete("staple-" + id);
+  renderCart();
+  const s = staples.find((x) => x.id === id);
+  if (s) showToast("Added " + (s.productName || s.item) + " to cart", "success");
 }
 
 // --- Staple search (inline) ---
@@ -1386,17 +1394,13 @@ async function selectManualProduct(index) {
   if (!products || !products[index]) return;
 
   const p = products[index];
-  const newItem = await appApi.addManualItem({
+  await appApi.addManualItem({
     item: p.name,
     quantity: 1,
     price: p.price || "",
     image: p.image || "",
   });
-  if (newItem && newItem.id) {
-    manualItems.push(newItem);
-  }
-
-  renderCart();
+  // Don't push locally — the WebSocket manual-items-update handler will update manualItems and re-render
   showToast("Added " + p.name + " to cart", "success");
 
   // Clear search
@@ -1850,6 +1854,7 @@ window.openExternalUrl = openExternalUrl;
 window.openStapleModal = openStapleModal;
 window.deleteStaple = deleteStaple;
 window.changeStapleQty = changeStapleQty;
+window.addSingleStapleToCart = addSingleStapleToCart;
 window.selectStapleSearchResult = selectStapleSearchResult;
 window.openRecipeModal = openRecipeModal;
 window.deleteRecipe = deleteRecipe;
