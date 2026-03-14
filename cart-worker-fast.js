@@ -637,6 +637,37 @@ function v3Get(cookieString, path) {
   });
 }
 
+function v3Post(cookieString, path, body) {
+  return new Promise((resolve, reject) => {
+    const bodyStr = JSON.stringify(body || {});
+    const req = https.request({
+      hostname: "shopwoodmans.com",
+      path,
+      method: "POST",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(bodyStr),
+        Cookie: cookieString,
+        Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
+        "x-client-identifier": "web",
+      },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, body: data }); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 // --- Cart fetch via V3 REST API ---
 
 async function fetchCartViaRest(session, progressCallback) {
@@ -869,17 +900,66 @@ async function fetchCheckoutModuleData(session, modulePath, progressCallback) {
   return res.body?.module_data || res.body;
 }
 
+async function fetchCheckoutTotals(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Fetching checkout totals...");
+
+  // Get the checkout container to find the totals module's async_data_path
+  const containerRes = await withRetry(() => v3Get(session.cookies, "/v3/containers/checkout"));
+  if (isSessionExpired(containerRes)) { closeFastSession(); throw new Error("Session expired"); }
+  if (containerRes.status !== 200) return null;
+
+  const modules = containerRes.body?.container?.modules || [];
+  const totalsModule = modules.find(function (m) {
+    return m.types && m.types.includes("checkout/checkout_totals");
+  });
+
+  if (!totalsModule || !totalsModule.async_data_path) return null;
+
+  progress("Fetching order totals...");
+  const totalsRes = await withRetry(() => v3Get(session.cookies, totalsModule.async_data_path));
+  if (totalsRes.status !== 200) return null;
+
+  return totalsRes.body?.module_data || null;
+}
+
+async function selectDeliveryOption(session, optionId, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Selecting time slot...");
+
+  // POST to /v3/orders/new with the delivery option parameter
+  const body = {};
+  body["deliveries[" + RETAILER_ID + "]"] = optionId;
+  const res = await withRetry(() => v3Post(session.cookies, "/v3/orders/new", body));
+  if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
+  return res.body;
+}
+
+// --- Order placement ---
+// To place an order, POST to /v3/orders (from checkout create_order action).
+// This is intentionally NOT implemented as a function — documented here for reference only.
+// The checkout flow requires:
+//   1. Service type selected (pickup/delivery)
+//   2. Time slot selected via selectDeliveryOption()
+//   3. Payment method configured on the Instacart/Woodmans account
+//   4. POST /v3/orders → creates the order
+// The "Place order" button in Instacart checkout calls:
+//   POST https://shopwoodmans.com/v3/orders
+// with the session cookies. No additional body is needed — all checkout state
+// (service type, time slot, payment) is stored server-side on Instacart.
+
 async function fetchCheckoutPreview(session, progressCallback) {
   const progress = progressCallback || (() => {});
 
-  // Fetch cart items (reliable) + service chooser + delivery options in parallel
-  const [cartItems, serviceChooser, deliveryOptions] = await Promise.all([
+  // Fetch cart items + service chooser + delivery options + real totals in parallel
+  const [cartItems, serviceChooser, deliveryOptions, checkoutTotals] = await Promise.all([
     fetchCart(session, progress).catch(() => []),
     fetchServiceChooser(session, progress).catch(() => null),
     fetchDeliveryOptions(session, progress).catch(() => null),
+    fetchCheckoutTotals(session, progress).catch(() => null),
   ]);
 
-  return { cartItems, serviceChooser, deliveryOptions };
+  return { cartItems, serviceChooser, deliveryOptions, checkoutTotals };
 }
 
 module.exports = {
@@ -895,5 +975,7 @@ module.exports = {
   fetchDeliveryOptions,
   fetchCheckoutContainer,
   fetchCheckoutPreview,
+  fetchCheckoutTotals,
+  selectDeliveryOption,
   sleep,
 };

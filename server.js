@@ -574,18 +574,37 @@ function startServer(deps) {
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
-      if (mode === "pickup") {
-        // delivery_options API always returns delivery data — use service chooser for pickup
-        var serviceChooser = await fastWorker.fetchServiceChooser(session, sendProgress);
-        return res.json({ _pickupFromServiceChooser: true, serviceChooser: serviceChooser });
-      }
+      // delivery_options API works for both pickup and delivery modes
       var options = await fastWorker.fetchDeliveryOptions(session, sendProgress);
-      return res.json(options);
+      // If no slots available (e.g. below order minimum), include service chooser as fallback
+      var svcOptions = options?.service_options || options;
+      var days = svcOptions?.days || options?.days || [];
+      if (mode === "pickup" && days.length === 0) {
+        var serviceChooser = await fastWorker.fetchServiceChooser(session, sendProgress);
+        return res.json({ _pickupFromServiceChooser: true, serviceChooser: serviceChooser, _belowMinimum: !!(svcOptions?.error_module) });
+      }
+      return res.json(svcOptions || options);
     } catch (err) {
       return res.json({ error: err.message });
     }
   });
 
+  // Select a pickup/delivery time slot
+  app.post("/api/checkout/select-timeslot", async function (req, res) {
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
+    var optionId = req.body && req.body.optionId;
+    if (!optionId) return res.json({ error: "No optionId provided" });
+    var fastWorker = require("./cart-worker-fast");
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      var result = await fastWorker.selectDeliveryOption(session, optionId, sendProgress);
+      return res.json({ ok: true, result: result });
+    } catch (err) {
+      return res.json({ error: err.message });
+    }
+  });
 
   // Fetch service chooser (delivery vs pickup options)
   app.post("/api/checkout/service-options", async function (req, res) {
