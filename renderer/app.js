@@ -1240,10 +1240,8 @@ function renderCart() {
   estEl.textContent = hasEstimate ? `Est. $${total.toFixed(2)}` : "";
 
   if (items.length === 0) {
-    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-cart.png" alt="" />Cart is empty. Add staples or enable recipes to populate.</p>';
-    return;
-  }
-
+    list.innerHTML = '<p class="empty-state">Cart is empty. Add staples or search below to add items.</p>';
+  } else {
   list.innerHTML = items
     .map(
       (item) => {
@@ -1268,6 +1266,7 @@ function renderCart() {
       }
     )
     .join("");
+  }
 
   // Lock/unlock manual search and staple/recipe controls
   const manualSearchRow = document.querySelector(".right-col .staple-search-row");
