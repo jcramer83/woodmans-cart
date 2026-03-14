@@ -478,7 +478,7 @@ async function doStapleSearch() {
   if (!query) return;
 
   const resultsDiv = document.getElementById("staple-search-results");
-  resultsDiv.style.display = "block";
+  resultsDiv.classList.add("visible");
   resultsDiv.innerHTML = skeletonHTML(3);
   document.getElementById("btn-staple-search").disabled = true;
 
@@ -540,7 +540,7 @@ async function selectStapleSearchResult(index) {
 
   // Clear search
   document.getElementById("staple-search-query").value = "";
-  document.getElementById("staple-search-results").style.display = "none";
+  document.getElementById("staple-search-results").classList.remove("visible");
   document.getElementById("staple-search-query").focus();
 }
 

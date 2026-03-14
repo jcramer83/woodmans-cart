@@ -414,11 +414,29 @@ a.btn-icon { text-decoration: none; }
 
 .staple-search-row input { flex: 1; }
 
-#staple-search-results {
-  overflow-y: auto;
-  margin-top: 8px;
+#section-staples {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+#section-staples .item-list {
+  flex: 1;
+  min-height: 60px;
+  overflow-y: auto;
+}
+
+#staple-search-results {
+  display: none;
+  overflow-y: auto;
+  margin-top: 8px;
+  flex: 2;
+  min-height: 0;
+}
+
+#staple-search-results.visible {
+  display: block;
 }
 
 /* Staple edit modal product display */
@@ -1030,12 +1048,13 @@ label input, label select {
 .section-header .collapse-btn.collapsed { transform: rotate(-90deg); }
 
 .section-collapsible {
-  overflow: hidden;
+  overflow: visible;
   transition: max-height 0.3s ease, opacity 0.25s ease;
   opacity: 1;
 }
 
 .section-collapsible.collapsed {
+  overflow: hidden;
   max-height: 0 !important;
   opacity: 0;
 }
