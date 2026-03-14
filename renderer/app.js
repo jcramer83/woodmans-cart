@@ -162,7 +162,8 @@ async function init() {
   updateTimeSlotsVisibility();
   bindEvents();
 
-  // Auto-fetch time slots if in pickup mode
+  // Auto-fetch online cart and time slots on load
+  fetchOnlineCart();
   if ((settings.shoppingMode || "instore") === "pickup") {
     fetchTimeSlots();
   }
@@ -341,8 +342,8 @@ async function toggleShoppingMode() {
   await appApi.saveSettings(settings);
   updateModeBadge();
   updateTimeSlotsVisibility();
-  // Clear stale online cart since mode changed
-  renderOnlineCart([]);
+  // Refresh online cart for new mode
+  fetchOnlineCart();
   // Auto-fetch time slots when switching to pickup
   if (settings.shoppingMode === "pickup") {
     fetchTimeSlots();
@@ -1638,6 +1639,9 @@ async function fetchTimeSlots() {
   loading.classList.add("active");
   container.innerHTML = "";
 
+  // Clear any stale progress text
+  const statusLine = document.getElementById("cart-status-line");
+
   try {
     const mode = settings.shoppingMode || "instore";
     // Fetch both time slots and service chooser in parallel
@@ -1655,7 +1659,6 @@ async function fetchTimeSlots() {
     if (slotsData && !slotsData.error) {
       renderTimeSlots(slotsData, container, pickupInfo);
     } else if (pickupInfo) {
-      // Fallback: show service chooser info
       container.innerHTML = '<p class="empty-state">' + esc(pickupInfo.bottom_text || "Pickup available") + '</p>';
     } else {
       container.innerHTML = '<p class="empty-state">' + esc((slotsData && slotsData.error) || "Failed to load time slots") + '</p>';
@@ -1664,6 +1667,7 @@ async function fetchTimeSlots() {
     container.innerHTML = '<p class="empty-state">Failed to load time slots</p>';
   } finally {
     loading.classList.remove("active");
+    if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
   }
 }
 
@@ -1760,6 +1764,9 @@ async function openCheckoutPreview() {
     renderCheckoutPreview(data, body);
   } catch (err) {
     body.innerHTML = '<div class="checkout-loading">Failed to load: ' + esc(err.message) + '</div>';
+  } finally {
+    const statusLine = document.getElementById("cart-status-line");
+    if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
   }
 }
 
@@ -1771,8 +1778,7 @@ function renderCheckoutPreview(data, body) {
   const deliveryOptions = data.deliveryOptions;
 
   // Check for empty cart error module
-  const hasEmptyCart = modules.length === 1 && /empty_cart|error/i.test(modules[0].id || "");
-  if (hasEmptyCart) {
+  if (modules.length === 1 && /empty_cart/i.test(modules[0].id || "")) {
     body.innerHTML = '<div class="checkout-warning">Your Woodmans online cart is empty.</div>' +
       '<p class="empty-state">Use "Add to Woodmans Cart" first, then come back to preview checkout.</p>';
     return;
