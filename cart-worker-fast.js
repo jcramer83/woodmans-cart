@@ -900,6 +900,24 @@ async function fetchCheckoutModuleData(session, modulePath, progressCallback) {
   return res.body?.module_data || res.body;
 }
 
+// Switch the checkout's service type (pickup vs delivery).
+// This is separate from ensureShoppingMode which switches the cart shop.
+// The checkout system on Instacart tracks service type independently via /v3/orders/new.
+async function ensureCheckoutServiceType(session, mode, progressCallback) {
+  const progress = progressCallback || (() => {});
+  const serviceType = mode === "pickup" ? "pickup" : "delivery";
+
+  // Skip if we already set this checkout service type in this session
+  if (session._checkoutServiceType === serviceType) return;
+
+  progress("Setting checkout to " + serviceType + "...");
+  const res = await withRetry(() => v3Post(session.cookies, "/v3/orders/new", {
+    service_type: serviceType,
+  }));
+  if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
+  session._checkoutServiceType = serviceType;
+}
+
 async function fetchCheckoutTotals(session, progressCallback) {
   const progress = progressCallback || (() => {});
   progress("Fetching checkout totals...");
@@ -939,7 +957,7 @@ async function selectDeliveryOption(session, optionId, progressCallback) {
 // To place an order, POST to /v3/orders (from checkout create_order action).
 // This is intentionally NOT implemented as a function — documented here for reference only.
 // The checkout flow requires:
-//   1. Service type selected (pickup/delivery)
+//   1. Service type selected (pickup/delivery) via ensureCheckoutServiceType()
 //   2. Time slot selected via selectDeliveryOption()
 //   3. Payment method configured on the Instacart/Woodmans account
 //   4. POST /v3/orders → creates the order
@@ -948,8 +966,11 @@ async function selectDeliveryOption(session, optionId, progressCallback) {
 // with the session cookies. No additional body is needed — all checkout state
 // (service type, time slot, payment) is stored server-side on Instacart.
 
-async function fetchCheckoutPreview(session, progressCallback) {
+async function fetchCheckoutPreview(session, mode, progressCallback) {
   const progress = progressCallback || (() => {});
+
+  // Switch checkout to the correct service type before fetching anything
+  await ensureCheckoutServiceType(session, mode, progress);
 
   // Fetch cart items + service chooser + delivery options + real totals in parallel
   const [cartItems, serviceChooser, deliveryOptions, checkoutTotals] = await Promise.all([
@@ -976,6 +997,7 @@ module.exports = {
   fetchCheckoutContainer,
   fetchCheckoutPreview,
   fetchCheckoutTotals,
+  ensureCheckoutServiceType,
   selectDeliveryOption,
   sleep,
 };

@@ -559,7 +559,7 @@ function startServer(deps) {
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
-      var preview = await fastWorker.fetchCheckoutPreview(session, sendProgress);
+      var preview = await fastWorker.fetchCheckoutPreview(session, mode, sendProgress);
       return res.json(preview);
     } catch (err) {
       return res.json({ error: err.message });
@@ -574,12 +574,13 @@ function startServer(deps) {
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
-      // delivery_options API works for both pickup and delivery modes
+      // Switch checkout service type so delivery_options returns correct slots
+      await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
       var options = await fastWorker.fetchDeliveryOptions(session, sendProgress);
       // If no slots available (e.g. below order minimum), include service chooser as fallback
       var svcOptions = options?.service_options || options;
       var days = svcOptions?.days || options?.days || [];
-      if (mode === "pickup" && days.length === 0) {
+      if (days.length === 0) {
         var serviceChooser = await fastWorker.fetchServiceChooser(session, sendProgress);
         return res.json({ _pickupFromServiceChooser: true, serviceChooser: serviceChooser, _belowMinimum: !!(svcOptions?.error_module) });
       }
@@ -599,6 +600,7 @@ function startServer(deps) {
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
       var result = await fastWorker.selectDeliveryOption(session, optionId, sendProgress);
       return res.json({ ok: true, result: result });
     } catch (err) {
