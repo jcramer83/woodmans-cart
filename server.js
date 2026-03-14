@@ -557,10 +557,8 @@ function startServer(deps) {
     var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
     var fastWorker = require("./cart-worker-fast");
     try {
-      // Force fresh session to ensure we see current cart state
-      fastWorker.closeFastSession();
-      currentSettings.shoppingMode = mode;
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
       var preview = await fastWorker.fetchCheckoutPreview(session, sendProgress);
       return res.json(preview);
     } catch (err) {
@@ -574,10 +572,8 @@ function startServer(deps) {
     var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
     var fastWorker = require("./cart-worker-fast");
     try {
-      // Force fresh session to ensure we see current cart state
-      fastWorker.closeFastSession();
-      currentSettings.shoppingMode = mode;
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
       var options = await fastWorker.fetchDeliveryOptions(session, sendProgress);
       return res.json(options);
     } catch (err) {
