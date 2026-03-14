@@ -893,6 +893,7 @@ module.exports = {
   copyCart,
   fetchServiceChooser,
   fetchDeliveryOptions,
+  fetchCheckoutContainer,
   fetchCheckoutPreview,
   sleep,
 };

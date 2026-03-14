@@ -574,12 +574,18 @@ function startServer(deps) {
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      if (mode === "pickup") {
+        // delivery_options API always returns delivery data — use service chooser for pickup
+        var serviceChooser = await fastWorker.fetchServiceChooser(session, sendProgress);
+        return res.json({ _pickupFromServiceChooser: true, serviceChooser: serviceChooser });
+      }
       var options = await fastWorker.fetchDeliveryOptions(session, sendProgress);
       return res.json(options);
     } catch (err) {
       return res.json({ error: err.message });
     }
   });
+
 
   // Fetch service chooser (delivery vs pickup options)
   app.post("/api/checkout/service-options", async function (req, res) {

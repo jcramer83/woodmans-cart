@@ -1644,22 +1644,23 @@ async function fetchTimeSlots() {
 
   try {
     const mode = settings.shoppingMode || "instore";
-    // Fetch both time slots and service chooser in parallel
-    const [slotsData, serviceData] = await Promise.all([
-      appApi.fetchTimeSlots(mode).catch(() => null),
-      appApi.fetchServiceOptions().catch(() => null),
-    ]);
+    const slotsData = await appApi.fetchTimeSlots(mode).catch(() => null);
 
-    // Find the pickup info from service chooser
-    let pickupInfo = null;
-    if (serviceData && serviceData.service_types) {
-      pickupInfo = serviceData.service_types.find(function(st) { return st.service_type === "pickup"; });
-    }
-
-    if (slotsData && !slotsData.error) {
+    if (slotsData && slotsData._pickupFromServiceChooser) {
+      // Pickup mode: server returned service chooser data instead of delivery_options
+      const sc = slotsData.serviceChooser;
+      const pickupInfo = sc && sc.service_types
+        ? sc.service_types.find(function(st) { return st.service_type === "pickup"; })
+        : null;
+      if (pickupInfo && pickupInfo.bottom_text) {
+        container.innerHTML = '<div class="pickup-info-card">' +
+          '<div class="pickup-info-label">Next Available Pickup</div>' +
+          '<div class="pickup-info-value">' + esc(pickupInfo.bottom_text) + '</div></div>';
+      } else {
+        container.innerHTML = '<p class="empty-state">Pickup available — check Woodmans site for times</p>';
+      }
+    } else if (slotsData && !slotsData.error) {
       renderTimeSlots(slotsData, container);
-    } else if (pickupInfo) {
-      container.innerHTML = '<p class="empty-state">' + esc(pickupInfo.bottom_text || "Pickup available") + '</p>';
     } else {
       container.innerHTML = '<p class="empty-state">' + esc((slotsData && slotsData.error) || "Failed to load time slots") + '</p>';
     }
@@ -1780,13 +1781,15 @@ function renderCheckoutPreview(data, body) {
 
   let html = '<div class="checkout-warning">Preview only — this will NOT place an order.</div>';
 
-  // Service type
+  // Service type — highlight the one matching current shopping mode
+  const currentMode = settings.shoppingMode || "instore";
+  const activeServiceType = currentMode === "pickup" ? "pickup" : "delivery";
   if (serviceChooser && serviceChooser.service_types) {
     html += '<div class="checkout-section">';
     html += '<div class="checkout-section-title">Service Type</div>';
     html += '<div class="checkout-service-options">';
     for (const st of serviceChooser.service_types) {
-      const isActive = st.type === "active";
+      const isActive = st.service_type === activeServiceType;
       html += '<div class="checkout-service-option' + (isActive ? ' active' : '') + '">';
       html += '<div class="service-label">' + esc(st.label || st.service_type || "") + '</div>';
       if (st.bottom_text) html += '<div class="service-detail">' + esc(st.bottom_text) + '</div>';
@@ -1825,12 +1828,12 @@ function renderCheckoutPreview(data, body) {
   html += '<div class="checkout-totals">';
   html += '<div class="checkout-total-row"><span>Subtotal (' + cartItems.length + ' items)</span><span>$' + subtotal.toFixed(2) + '</span></div>';
 
-  // Service fee from delivery options or service chooser
+  // Service fee — use the service type matching current shopping mode
   let serviceFee = "";
   if (serviceChooser && serviceChooser.service_types) {
-    const active = serviceChooser.service_types.find(function(st) { return st.type === "active"; });
-    if (active && active.bottom_text) {
-      const feeMatch = active.bottom_text.match(/\$[\d.]+/);
+    const matchingService = serviceChooser.service_types.find(function(st) { return st.service_type === activeServiceType; });
+    if (matchingService && matchingService.bottom_text) {
+      const feeMatch = matchingService.bottom_text.match(/\$[\d.]+/);
       if (feeMatch) serviceFee = feeMatch[0];
     }
   }

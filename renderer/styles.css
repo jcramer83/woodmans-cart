@@ -1628,6 +1628,26 @@ body.dark .recipe-view-instructions li {
   margin-left: 4px;
 }
 
+.pickup-info-card {
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: center;
+}
+
+.pickup-info-label {
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.pickup-info-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
 /* Checkout Preview Modal */
 .checkout-loading {
   text-align: center;
