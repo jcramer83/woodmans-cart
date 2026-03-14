@@ -1655,42 +1655,43 @@ function renderTimeSlots(data, container) {
   const tiers = data.tiers || [];
   const days = data.days || [];
 
-  if (days.length === 0 && tiers.length > 0) {
-    // Show tier-level info (e.g. "below order minimum")
+  if (days.length === 0) {
     const errorMod = data.error_module;
     if (errorMod) {
       container.innerHTML = '<p class="empty-state">' + esc(errorMod.title || "No time slots available") +
         (errorMod.description_lines ? '<br>' + errorMod.description_lines.map(esc).join('<br>') : '') + '</p>';
     } else {
-      container.innerHTML = '<p class="empty-state">No time slots available. Add items to cart first.</p>';
+      container.innerHTML = '<p class="empty-state">No time slots available. Add items to Woodmans cart first.</p>';
     }
     return;
   }
 
   let html = '';
   for (const day of days) {
-    const dayLabel = day.formatted_date || day.date || "Unknown";
-    const slots = day.slots || day.windows || [];
-    if (slots.length === 0) continue;
+    const dayLabel = day.day_full || day.date || day.day || "Unknown";
+    // Instacart uses "options" array, not "slots"
+    const options = day.options || day.slots || day.windows || [];
+    if (options.length === 0) continue;
 
     html += '<div class="timeslot-day">';
     html += '<div class="timeslot-day-label">' + esc(dayLabel) + '</div>';
     html += '<div class="timeslot-slots">';
 
-    for (const slot of slots) {
-      const label = slot.formatted_time_range || slot.time_range || slot.label || "";
-      const available = slot.is_available !== false;
-      const price = slot.price || slot.total_price || "";
-      const optionId = slot.option_id || "";
+    for (const opt of options) {
+      const label = opt.window || opt.formatted_time_range || opt.time_range || opt.label || "";
+      const attrs = opt.attributes || [];
+      const available = attrs.includes("available");
+      const price = opt.price || opt.total_price || "";
+      const optionId = opt.id || opt.option_id || "";
       const isSelected = selectedTimeSlot && selectedTimeSlot.optionId === optionId;
 
       html += '<div class="timeslot-chip' +
         (isSelected ? ' selected' : '') +
         (!available ? ' unavailable' : '') +
         '" onclick="' + (available ? "selectTimeSlot('" + esc(optionId) + "','" + esc(label) + "','" + esc(dayLabel) + "')" : "") +
-        '" title="' + esc(label) + '">' +
+        '" title="' + esc(opt.full_window || label) + '">' +
         esc(label) +
-        (price ? '<span class="timeslot-price">' + esc(typeof price === 'string' ? price : '$' + price) + '</span>' : '') +
+        (price ? '<span class="timeslot-price">' + esc(price) + '</span>' : '') +
         '</div>';
     }
 
