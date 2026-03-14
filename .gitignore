@@ -6,3 +6,5 @@ data/manual-items.json
 *.tar.gz
 *.lnk
 .claude/
+poc-*.js
+poc-*.json

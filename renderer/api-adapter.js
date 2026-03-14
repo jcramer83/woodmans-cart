@@ -110,6 +110,11 @@
     updateManualItem: function (id, data) { return fetch("/api/cart/manual/" + id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }).then(function (r) { return r.json(); }); },
     clearManualItems: function () { return apiPost("/api/cart/manual/clear"); },
 
+    // Checkout (read-only — never places orders)
+    fetchCheckoutPreview: function (mode) { return apiPost("/api/checkout/preview", { shoppingMode: mode }); },
+    fetchTimeSlots: function (mode) { return apiPost("/api/checkout/timeslots", { shoppingMode: mode }); },
+    fetchServiceOptions: function () { return apiPost("/api/checkout/service-options"); },
+
     // Open URL in new tab (web browser)
     openExternal: function (url) { window.open(url, "_blank"); return Promise.resolve(); },
 

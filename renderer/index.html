@@ -86,9 +86,20 @@
         <div id="manual-search-results" class="product-results" style="display:none;"></div>
       </section>
 
+      <!-- Pickup Time Slots (shown in pickup mode) -->
+      <section id="section-timeslots" class="section" style="display:none;">
+        <div class="section-header">
+          <h2>Pickup Time <span id="timeslot-selected" class="timeslot-selected-label"></span></h2>
+          <button id="btn-refresh-timeslots" class="btn btn-sm" onclick="fetchTimeSlots()">Refresh</button>
+        </div>
+        <div id="timeslots-loading" class="activity-bar"><div class="activity-bar-fill"></div></div>
+        <div id="timeslots-container" class="timeslots-container"></div>
+      </section>
+
       <!-- Action section -->
       <section class="section action-section">
         <div class="action-buttons">
+          <button id="btn-checkout-preview" class="btn btn-lg" onclick="openCheckoutPreview()">Checkout Preview</button>
           <button id="btn-start-cart" class="btn btn-lg btn-accent">Add to Woodmans Cart</button>
           <button id="btn-stop-cart" class="btn btn-lg btn-danger" style="display:none;">Stop</button>
         </div>
@@ -310,6 +321,22 @@
       <div class="modal-footer">
         <button class="btn" data-close="modal-copy-cart">Cancel</button>
         <button id="btn-copy-cart-confirm" class="btn btn-accent">Copy Cart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkout Preview Modal -->
+  <div id="modal-checkout" class="modal-overlay">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>Checkout Preview</h3>
+        <button class="btn-close" data-close="modal-checkout">&times;</button>
+      </div>
+      <div class="modal-body" id="checkout-preview-body">
+        <div class="checkout-loading">Loading checkout details...</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-close="modal-checkout">Close</button>
       </div>
     </div>
   </div>

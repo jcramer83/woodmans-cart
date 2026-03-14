@@ -10,6 +10,8 @@ let excludedCartIds = new Set();
 let cartRunning = false;
 let removeProgressListener = null;
 let cartItemResults = {}; // { itemId: "ok"|"fail"|"skip" } — tracks per-item status during automation
+let selectedTimeSlot = null; // { day, slot } — currently selected pickup time slot
+let checkoutPreviewData = null; // cached checkout preview response
 
 // --- Modal helpers ---
 
@@ -157,7 +159,13 @@ async function init() {
   renderRecipes();
   renderCart();
   updateModeBadge();
+  updateTimeSlotsVisibility();
   bindEvents();
+
+  // Auto-fetch time slots if in pickup mode
+  if ((settings.shoppingMode || "instore") === "pickup") {
+    fetchTimeSlots();
+  }
 
   // Listen for online cart updates pushed after automation completes
   appApi.onOnlineCartUpdate((items) => {
@@ -332,8 +340,13 @@ async function toggleShoppingMode() {
   settings.shoppingMode = oldMode === "pickup" ? "instore" : "pickup";
   await appApi.saveSettings(settings);
   updateModeBadge();
+  updateTimeSlotsVisibility();
   // Clear stale online cart since mode changed
   renderOnlineCart([]);
+  // Auto-fetch time slots when switching to pickup
+  if (settings.shoppingMode === "pickup") {
+    fetchTimeSlots();
+  }
 }
 
 // --- Dark Mode ---
@@ -1606,6 +1619,290 @@ async function executeCopyCart() {
   }
 }
 
+// --- Pickup Time Slots & Checkout Preview ---
+
+function updateTimeSlotsVisibility() {
+  const section = document.getElementById("section-timeslots");
+  if (!section) return;
+  const mode = settings.shoppingMode || "instore";
+  section.style.display = mode === "pickup" ? "" : "none";
+}
+
+async function fetchTimeSlots() {
+  const container = document.getElementById("timeslots-container");
+  const loading = document.getElementById("timeslots-loading");
+  if (!container) return;
+
+  loading.classList.add("active");
+  container.innerHTML = "";
+
+  try {
+    const mode = settings.shoppingMode || "instore";
+    const data = await appApi.fetchTimeSlots(mode);
+    if (data.error) {
+      container.innerHTML = '<p class="empty-state">' + esc(data.error) + '</p>';
+      return;
+    }
+    renderTimeSlots(data, container);
+  } catch (err) {
+    container.innerHTML = '<p class="empty-state">Failed to load time slots</p>';
+  } finally {
+    loading.classList.remove("active");
+  }
+}
+
+function renderTimeSlots(data, container) {
+  const tiers = data.tiers || [];
+  const days = data.days || [];
+
+  if (days.length === 0 && tiers.length > 0) {
+    // Show tier-level info (e.g. "below order minimum")
+    const errorMod = data.error_module;
+    if (errorMod) {
+      container.innerHTML = '<p class="empty-state">' + esc(errorMod.title || "No time slots available") +
+        (errorMod.description_lines ? '<br>' + errorMod.description_lines.map(esc).join('<br>') : '') + '</p>';
+    } else {
+      container.innerHTML = '<p class="empty-state">No time slots available. Add items to cart first.</p>';
+    }
+    return;
+  }
+
+  let html = '';
+  for (const day of days) {
+    const dayLabel = day.formatted_date || day.date || "Unknown";
+    const slots = day.slots || day.windows || [];
+    if (slots.length === 0) continue;
+
+    html += '<div class="timeslot-day">';
+    html += '<div class="timeslot-day-label">' + esc(dayLabel) + '</div>';
+    html += '<div class="timeslot-slots">';
+
+    for (const slot of slots) {
+      const label = slot.formatted_time_range || slot.time_range || slot.label || "";
+      const available = slot.is_available !== false;
+      const price = slot.price || slot.total_price || "";
+      const optionId = slot.option_id || "";
+      const isSelected = selectedTimeSlot && selectedTimeSlot.optionId === optionId;
+
+      html += '<div class="timeslot-chip' +
+        (isSelected ? ' selected' : '') +
+        (!available ? ' unavailable' : '') +
+        '" onclick="' + (available ? "selectTimeSlot('" + esc(optionId) + "','" + esc(label) + "','" + esc(dayLabel) + "')" : "") +
+        '" title="' + esc(label) + '">' +
+        esc(label) +
+        (price ? '<span class="timeslot-price">' + esc(typeof price === 'string' ? price : '$' + price) + '</span>' : '') +
+        '</div>';
+    }
+
+    html += '</div></div>';
+  }
+
+  if (!html) {
+    container.innerHTML = '<p class="empty-state">No time slots available right now.</p>';
+  } else {
+    container.innerHTML = html;
+  }
+}
+
+function selectTimeSlot(optionId, label, dayLabel) {
+  selectedTimeSlot = { optionId, label, dayLabel };
+  const selectedEl = document.getElementById("timeslot-selected");
+  if (selectedEl) selectedEl.textContent = dayLabel + " " + label;
+  // Re-render to update selected state
+  const container = document.getElementById("timeslots-container");
+  if (container) {
+    container.querySelectorAll(".timeslot-chip").forEach(function (chip) {
+      chip.classList.remove("selected");
+    });
+    // Find and select the clicked one
+    container.querySelectorAll(".timeslot-chip").forEach(function (chip) {
+      if (chip.getAttribute("onclick") && chip.getAttribute("onclick").includes(optionId)) {
+        chip.classList.add("selected");
+      }
+    });
+  }
+  showToast("Selected: " + dayLabel + " " + label, "success");
+}
+
+async function openCheckoutPreview() {
+  showModal("modal-checkout");
+  const body = document.getElementById("checkout-preview-body");
+  body.innerHTML = '<div class="checkout-loading">Loading checkout details...</div>';
+
+  try {
+    const mode = settings.shoppingMode || "instore";
+    const data = await appApi.fetchCheckoutPreview(mode);
+    if (data.error) {
+      body.innerHTML = '<div class="checkout-loading">' + esc(data.error) + '</div>';
+      return;
+    }
+    checkoutPreviewData = data;
+    renderCheckoutPreview(data, body);
+  } catch (err) {
+    body.innerHTML = '<div class="checkout-loading">Failed to load: ' + esc(err.message) + '</div>';
+  }
+}
+
+function renderCheckoutPreview(data, body) {
+  const container = data.container || {};
+  const modules = container.modules || [];
+  const asyncModules = data.asyncModules || {};
+  const serviceChooser = data.serviceChooser;
+  const deliveryOptions = data.deliveryOptions;
+
+  let html = '<div class="checkout-warning">Preview only — this will NOT place an order.</div>';
+
+  // Service type
+  if (serviceChooser) {
+    html += '<div class="checkout-section">';
+    html += '<div class="checkout-section-title">Service Type</div>';
+    html += '<div class="checkout-service-options">';
+    const options = serviceChooser.options || serviceChooser.service_options || [];
+    if (options.length > 0) {
+      for (const opt of options) {
+        const isActive = opt.selected || opt.is_selected || false;
+        html += '<div class="checkout-service-option' + (isActive ? ' active' : '') + '">';
+        html += '<div class="service-label">' + esc(opt.label || opt.name || opt.type || "") + '</div>';
+        html += '<div class="service-detail">' + esc(opt.secondary_label || opt.description || "") + '</div>';
+        html += '</div>';
+      }
+    } else {
+      // Try extracting from raw module data
+      const mode = settings.shoppingMode || "instore";
+      html += '<div class="checkout-service-option active"><div class="service-label">' +
+        (mode === "pickup" ? "Pickup" : "Delivery") + '</div></div>';
+    }
+    html += '</div></div>';
+  }
+
+  // Extract info from modules
+  let addressHtml = '';
+  let paymentHtml = '';
+  let totalsHtml = '';
+  let itemsCount = 0;
+
+  for (const mod of modules) {
+    const modData = mod.data || {};
+    const asyncData = asyncModules[mod.id] || {};
+    const types = (mod.types || []).join(",");
+    const modJson = JSON.stringify(modData);
+
+    // Address
+    if (/address/i.test(types) || /address/i.test(mod.id)) {
+      const addr = modData.address || asyncData.address || modData;
+      if (addr.formatted_address || addr.street || addr.display_text) {
+        addressHtml = '<div class="checkout-section"><div class="checkout-section-title">Address</div>' +
+          '<div class="checkout-section-value">' + esc(addr.formatted_address || addr.display_text || [addr.street, addr.city, addr.state, addr.zip].filter(Boolean).join(", ")) + '</div></div>';
+      }
+    }
+
+    // Payment
+    if (/payment/i.test(types) || /payment/i.test(mod.id)) {
+      const pay = modData.payment_method || asyncData.payment_method || modData;
+      if (pay.display_name || pay.card_type || pay.last_four || pay.label) {
+        paymentHtml = '<div class="checkout-section"><div class="checkout-section-title">Payment</div>' +
+          '<div class="checkout-section-value">' + esc(pay.display_name || pay.label || ((pay.card_type || "Card") + " ending in " + (pay.last_four || "****"))) + '</div></div>';
+      }
+    }
+
+    // Totals / Order summary
+    if (/total|summary|order_total/i.test(types) || /total|summary/i.test(mod.id)) {
+      const totals = modData.totals || asyncData.totals || modData.order_totals || asyncData.order_totals;
+      if (totals) {
+        totalsHtml = renderCheckoutTotals(totals);
+      }
+      // Check for line items
+      const lines = modData.line_items || modData.lines || asyncData.line_items || asyncData.lines;
+      if (Array.isArray(lines)) {
+        totalsHtml = renderCheckoutLineItems(lines);
+      }
+    }
+
+    // Item count
+    if (modData.items_count !== undefined) itemsCount = modData.items_count;
+  }
+
+  // Time slots from delivery options
+  if (deliveryOptions) {
+    const tiers = deliveryOptions.tiers || [];
+    const availTiers = tiers.filter(function(t) { return t.is_available; });
+    if (availTiers.length > 0) {
+      html += '<div class="checkout-section"><div class="checkout-section-title">Available Times</div><div class="checkout-section-value">';
+      for (const t of availTiers) {
+        html += '<div>' + esc(t.tier_name || t.type || "") + ': ' + esc(t.primary_label || "") +
+          (t.total_price ? ' — ' + esc(t.total_price) : '') + '</div>';
+      }
+      html += '</div></div>';
+    }
+    if (selectedTimeSlot) {
+      html += '<div class="checkout-section"><div class="checkout-section-title">Selected Time</div>' +
+        '<div class="checkout-section-value">' + esc(selectedTimeSlot.dayLabel + " " + selectedTimeSlot.label) + '</div></div>';
+    }
+  }
+
+  html += addressHtml;
+  html += paymentHtml;
+
+  if (itemsCount > 0) {
+    html += '<div class="checkout-section"><div class="checkout-section-title">Items</div>' +
+      '<div class="checkout-section-value">' + itemsCount + ' items in cart</div></div>';
+  }
+
+  html += totalsHtml;
+
+  if (!addressHtml && !paymentHtml && !totalsHtml) {
+    // Fallback: show raw module summary
+    html += '<div class="checkout-section"><div class="checkout-section-title">Checkout Modules</div>';
+    html += '<div class="checkout-section-value">';
+    for (const mod of modules) {
+      const types = (mod.types || []).join(", ");
+      html += '<div style="font-size:12px;color:#888;padding:2px 0;">' + esc(mod.id) + ' (' + esc(types) + ')</div>';
+    }
+    html += '</div></div>';
+  }
+
+  body.innerHTML = html;
+}
+
+function renderCheckoutTotals(totals) {
+  if (!totals) return '';
+  let html = '<div class="checkout-section"><div class="checkout-section-title">Order Summary</div>';
+  html += '<div class="checkout-totals">';
+
+  if (Array.isArray(totals)) {
+    for (const line of totals) {
+      const isFinal = /total/i.test(line.type || "") && !/sub/i.test(line.type || "");
+      html += '<div class="checkout-total-row' + (isFinal ? ' total-final' : '') + '">' +
+        '<span>' + esc(line.label || line.name || line.type || "") + '</span>' +
+        '<span>' + esc(line.formatted_amount || line.amount || line.value || "") + '</span></div>';
+    }
+  } else if (typeof totals === 'object') {
+    for (const [key, val] of Object.entries(totals)) {
+      if (typeof val === 'string' || typeof val === 'number') {
+        const isFinal = /^total$/i.test(key);
+        html += '<div class="checkout-total-row' + (isFinal ? ' total-final' : '') + '">' +
+          '<span>' + esc(key.replace(/_/g, ' ')) + '</span><span>' + esc(String(val)) + '</span></div>';
+      }
+    }
+  }
+
+  html += '</div></div>';
+  return html;
+}
+
+function renderCheckoutLineItems(lines) {
+  let html = '<div class="checkout-section"><div class="checkout-section-title">Order Summary</div>';
+  html += '<div class="checkout-totals">';
+  for (const line of lines) {
+    const isFinal = line.is_total || (/total/i.test(line.type || "") && !/sub/i.test(line.type || ""));
+    html += '<div class="checkout-total-row' + (isFinal ? ' total-final' : '') + '">' +
+      '<span>' + esc(line.label || line.display_name || line.name || "") + '</span>' +
+      '<span>' + esc(line.formatted_amount || line.amount || "") + '</span></div>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
 // --- Cart Automation ---
 
 async function startCartAutomation() {
@@ -1881,3 +2178,6 @@ window.dropItem = dropItem;
 window.dragEndItem = dragEndItem;
 window.openCopyCartModal = openCopyCartModal;
 window.executeCopyCart = executeCopyCart;
+window.fetchTimeSlots = fetchTimeSlots;
+window.selectTimeSlot = selectTimeSlot;
+window.openCheckoutPreview = openCheckoutPreview;

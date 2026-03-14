@@ -551,6 +551,49 @@ function startServer(deps) {
     res.json({ ok: true });
   });
 
+  // Checkout preview (fetch service options, time slots, order summary — NEVER places order)
+  app.post("/api/checkout/preview", async function (req, res) {
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
+    var fastWorker = require("./cart-worker-fast");
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      var preview = await fastWorker.fetchCheckoutPreview(session, sendProgress);
+      return res.json(preview);
+    } catch (err) {
+      return res.json({ error: err.message });
+    }
+  });
+
+  // Fetch pickup/delivery time slots
+  app.post("/api/checkout/timeslots", async function (req, res) {
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
+    var fastWorker = require("./cart-worker-fast");
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      var options = await fastWorker.fetchDeliveryOptions(session, sendProgress);
+      return res.json(options);
+    } catch (err) {
+      return res.json({ error: err.message });
+    }
+  });
+
+  // Fetch service chooser (delivery vs pickup options)
+  app.post("/api/checkout/service-options", async function (req, res) {
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var fastWorker = require("./cart-worker-fast");
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      var options = await fastWorker.fetchServiceChooser(session, sendProgress);
+      return res.json(options);
+    } catch (err) {
+      return res.json({ error: err.message });
+    }
+  });
+
   // Collect local network addresses
   const os = require("os");
   const addresses = [];

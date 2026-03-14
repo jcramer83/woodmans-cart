@@ -827,6 +827,76 @@ async function copyCart(session, fromMode, toMode, clearSource, progressCallback
   return { copied: sourceUpdates.length, cleared };
 }
 
+// --- Checkout / pickup time slots via V3 REST ---
+
+const RETAILER_ID = "1396";
+
+async function fetchServiceChooser(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Fetching service options...");
+  const res = await withRetry(() => v3Get(session.cookies, "/v3/module_data/servicechooser?ngc_path=checkout"));
+  if (res.status !== 200) throw new Error("Failed to fetch service options (status " + res.status + ")");
+  return res.body?.module_data || res.body;
+}
+
+async function fetchDeliveryOptions(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Fetching delivery/pickup options...");
+  const res = await withRetry(() => v3Get(session.cookies, "/v3/retailers/" + RETAILER_ID + "/delivery_options"));
+  if (res.status !== 200) throw new Error("Failed to fetch delivery options (status " + res.status + ")");
+  return res.body?.service_options || res.body;
+}
+
+async function fetchCheckoutContainer(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Fetching checkout data...");
+  const res = await withRetry(() => v3Get(session.cookies, "/v3/containers/checkout"));
+  if (res.status !== 200) throw new Error("Failed to fetch checkout (status " + res.status + ")");
+  return res.body?.container || res.body;
+}
+
+async function fetchCheckoutModuleData(session, modulePath, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Fetching checkout details...");
+  const res = await withRetry(() => v3Get(session.cookies, modulePath));
+  if (res.status !== 200) return null;
+  return res.body?.module_data || res.body;
+}
+
+async function fetchCheckoutPreview(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+
+  // Fetch all checkout data in parallel
+  const [container, serviceChooser, deliveryOptions] = await Promise.all([
+    fetchCheckoutContainer(session, progress),
+    fetchServiceChooser(session, progress).catch(() => null),
+    fetchDeliveryOptions(session, progress).catch(() => null),
+  ]);
+
+  // Fetch async module data for key modules (totals, payment, review)
+  const asyncModules = {};
+  const modules = container.modules || [];
+  const asyncFetches = [];
+  for (const mod of modules) {
+    if (mod.async_data_path) {
+      const key = mod.id;
+      asyncFetches.push(
+        fetchCheckoutModuleData(session, mod.async_data_path, progress)
+          .then(data => { if (data) asyncModules[key] = data; })
+          .catch(() => {})
+      );
+    }
+  }
+  await Promise.all(asyncFetches);
+
+  return {
+    container,
+    serviceChooser,
+    deliveryOptions,
+    asyncModules,
+  };
+}
+
 module.exports = {
   getFastSession,
   closeFastSession,
@@ -836,5 +906,8 @@ module.exports = {
   fetchCart,
   removeAllCartItems,
   copyCart,
+  fetchServiceChooser,
+  fetchDeliveryOptions,
+  fetchCheckoutPreview,
   sleep,
 };

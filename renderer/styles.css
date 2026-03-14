@@ -1559,6 +1559,245 @@ body.dark .recipe-view-instructions li {
   color: #ccc;
 }
 
+/* Pickup Time Slots */
+.timeslots-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 200px;
+}
+
+.timeslot-day {
+  margin-bottom: 4px;
+}
+
+.timeslot-day-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.timeslot-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.timeslot-chip {
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.timeslot-chip:hover {
+  background: #ffebee;
+  border-color: #ef9a9a;
+}
+
+.timeslot-chip.selected {
+  background: #c62828;
+  color: #fff;
+  border-color: #c62828;
+}
+
+.timeslot-chip.unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.timeslot-selected-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #c62828;
+  margin-left: 8px;
+}
+
+.timeslot-price {
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+}
+
+/* Checkout Preview Modal */
+.checkout-loading {
+  text-align: center;
+  padding: 24px;
+  color: #888;
+  font-style: italic;
+}
+
+.checkout-section {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.checkout-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.checkout-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.checkout-section-value {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.checkout-totals {
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.checkout-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.checkout-total-row.total-final {
+  font-weight: 700;
+  font-size: 15px;
+  border-top: 1px solid #ddd;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.checkout-service-options {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.checkout-service-option {
+  flex: 1;
+  padding: 10px 12px;
+  border: 2px solid #eee;
+  border-radius: 8px;
+  text-align: center;
+  cursor: default;
+}
+
+.checkout-service-option.active {
+  border-color: #c62828;
+  background: #fff5f5;
+}
+
+.checkout-service-option .service-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.checkout-service-option .service-detail {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.checkout-warning {
+  background: #fff3e0;
+  border: 1px solid #ffcc80;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #e65100;
+  margin-bottom: 12px;
+}
+
+/* Dark mode for timeslots and checkout */
+body.dark .timeslot-day-label {
+  color: #999;
+}
+
+body.dark .timeslot-chip {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+  color: #ccc;
+}
+
+body.dark .timeslot-chip:hover {
+  background: #3a2020;
+  border-color: #ef5350;
+}
+
+body.dark .timeslot-chip.selected {
+  background: #d32f2f;
+  border-color: #d32f2f;
+  color: #fff;
+}
+
+body.dark .timeslot-selected-label {
+  color: #ef5350;
+}
+
+body.dark .timeslot-price {
+  color: #777;
+}
+
+body.dark .checkout-loading {
+  color: #666;
+}
+
+body.dark .checkout-section {
+  border-bottom-color: #2c2c2c;
+}
+
+body.dark .checkout-section-title {
+  color: #999;
+}
+
+body.dark .checkout-section-value {
+  color: #e0e0e0;
+}
+
+body.dark .checkout-totals {
+  background: #252525;
+}
+
+body.dark .checkout-total-row.total-final {
+  border-top-color: #3a3a3a;
+}
+
+body.dark .checkout-service-option {
+  border-color: #3a3a3a;
+  background: #1e1e1e;
+}
+
+body.dark .checkout-service-option.active {
+  border-color: #ef5350;
+  background: #2d1616;
+}
+
+body.dark .checkout-service-option .service-detail {
+  color: #777;
+}
+
+body.dark .checkout-warning {
+  background: #2a1f0a;
+  border-color: #6d4c00;
+  color: #ffb74d;
+}
+
 /* Print styles */
 @media print {
   body * {
@@ -1874,6 +2113,16 @@ body.dark .recipe-view-instructions li {
   /* AI options: single-column on mobile */
   .ai-options .checkbox-label {
     flex: 0 0 100%;
+  }
+
+  /* Timeslots on mobile */
+  .timeslots-container {
+    max-height: 150px;
+  }
+
+  .timeslot-chip {
+    padding: 8px 14px;
+    font-size: 13px;
   }
 
   /* Cart estimate */
