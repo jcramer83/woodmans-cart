@@ -1626,6 +1626,8 @@ function updateTimeSlotsVisibility() {
   if (!section) return;
   const mode = settings.shoppingMode || "instore";
   section.style.display = mode === "pickup" ? "" : "none";
+  const label = document.getElementById("timeslot-header-label");
+  if (label) label.textContent = mode === "pickup" ? "Pickup Time" : "Delivery Time";
 }
 
 async function fetchTimeSlots() {
@@ -1638,12 +1640,26 @@ async function fetchTimeSlots() {
 
   try {
     const mode = settings.shoppingMode || "instore";
-    const data = await appApi.fetchTimeSlots(mode);
-    if (data.error) {
-      container.innerHTML = '<p class="empty-state">' + esc(data.error) + '</p>';
-      return;
+    // Fetch both time slots and service chooser in parallel
+    const [slotsData, serviceData] = await Promise.all([
+      appApi.fetchTimeSlots(mode).catch(() => null),
+      appApi.fetchServiceOptions().catch(() => null),
+    ]);
+
+    // Find the pickup info from service chooser
+    let pickupInfo = null;
+    if (serviceData && serviceData.service_types) {
+      pickupInfo = serviceData.service_types.find(function(st) { return st.service_type === "pickup"; });
     }
-    renderTimeSlots(data, container);
+
+    if (slotsData && !slotsData.error) {
+      renderTimeSlots(slotsData, container, pickupInfo);
+    } else if (pickupInfo) {
+      // Fallback: show service chooser info
+      container.innerHTML = '<p class="empty-state">' + esc(pickupInfo.bottom_text || "Pickup available") + '</p>';
+    } else {
+      container.innerHTML = '<p class="empty-state">' + esc((slotsData && slotsData.error) || "Failed to load time slots") + '</p>';
+    }
   } catch (err) {
     container.innerHTML = '<p class="empty-state">Failed to load time slots</p>';
   } finally {
@@ -1651,7 +1667,7 @@ async function fetchTimeSlots() {
   }
 }
 
-function renderTimeSlots(data, container) {
+function renderTimeSlots(data, container, pickupInfo) {
   const tiers = data.tiers || [];
   const days = data.days || [];
 
@@ -1677,11 +1693,14 @@ function renderTimeSlots(data, container) {
     html += '<div class="timeslot-day-label">' + esc(dayLabel) + '</div>';
     html += '<div class="timeslot-slots">';
 
+    // Use pickup price from service chooser if available, otherwise use option price
+    const pickupPrice = pickupInfo && pickupInfo.bottom_text ? pickupInfo.bottom_text.split("•")[0].trim() : "";
+
     for (const opt of options) {
-      const label = opt.window || opt.formatted_time_range || opt.time_range || opt.label || "";
+      const label = opt.pickup_full_window || opt.window || opt.formatted_time_range || opt.label || "";
       const attrs = opt.attributes || [];
       const available = attrs.includes("available");
-      const price = opt.price || opt.total_price || "";
+      const price = pickupPrice || opt.price || "";
       const optionId = opt.id || opt.option_id || "";
       const isSelected = selectedTimeSlot && selectedTimeSlot.optionId === optionId;
 
