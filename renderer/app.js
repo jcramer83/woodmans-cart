@@ -1657,7 +1657,7 @@ async function fetchTimeSlots() {
     }
 
     if (slotsData && !slotsData.error) {
-      renderTimeSlots(slotsData, container, pickupInfo);
+      renderTimeSlots(slotsData, container);
     } else if (pickupInfo) {
       container.innerHTML = '<p class="empty-state">' + esc(pickupInfo.bottom_text || "Pickup available") + '</p>';
     } else {
@@ -1671,7 +1671,7 @@ async function fetchTimeSlots() {
   }
 }
 
-function renderTimeSlots(data, container, pickupInfo) {
+function renderTimeSlots(data, container) {
   const tiers = data.tiers || [];
   const days = data.days || [];
 
@@ -1697,16 +1697,13 @@ function renderTimeSlots(data, container, pickupInfo) {
     html += '<div class="timeslot-day-label">' + esc(dayLabel) + '</div>';
     html += '<div class="timeslot-slots">';
 
-    // Use pickup price from service chooser if available, otherwise use option price
-    const pickupPrice = pickupInfo && pickupInfo.bottom_text ? pickupInfo.bottom_text.split("•")[0].trim() : "";
-
     for (const opt of options) {
       const label = opt.pickup_full_window || opt.window || opt.formatted_time_range || opt.label || "";
       const attrs = opt.attributes || [];
       const available = attrs.includes("available");
-      const price = pickupPrice || opt.price || "";
       const optionId = opt.id || opt.option_id || "";
       const isSelected = selectedTimeSlot && selectedTimeSlot.optionId === optionId;
+      const price = ""; // Don't show per-slot price — delivery_options API always returns delivery pricing
 
       html += '<div class="timeslot-chip' +
         (isSelected ? ' selected' : '') +
@@ -1771,14 +1768,11 @@ async function openCheckoutPreview() {
 }
 
 function renderCheckoutPreview(data, body) {
-  const container = data.container || {};
-  const modules = container.modules || [];
-  const asyncModules = data.asyncModules || {};
+  const cartItems = data.cartItems || [];
   const serviceChooser = data.serviceChooser;
   const deliveryOptions = data.deliveryOptions;
 
-  // Check for empty cart error module
-  if (modules.length === 1 && /empty_cart/i.test(modules[0].id || "")) {
+  if (cartItems.length === 0) {
     body.innerHTML = '<div class="checkout-warning">Your Woodmans online cart is empty.</div>' +
       '<p class="empty-state">Use "Add to Woodmans Cart" first, then come back to preview checkout.</p>';
     return;
@@ -1786,130 +1780,68 @@ function renderCheckoutPreview(data, body) {
 
   let html = '<div class="checkout-warning">Preview only — this will NOT place an order.</div>';
 
-  // Service type — extract from service_chooser module or async data
-  let serviceData = null;
-  for (const mod of modules) {
-    if (/service_chooser/i.test(mod.id)) {
-      serviceData = asyncModules[mod.id] || mod.data || {};
-      break;
+  // Service type
+  if (serviceChooser && serviceChooser.service_types) {
+    html += '<div class="checkout-section">';
+    html += '<div class="checkout-section-title">Service Type</div>';
+    html += '<div class="checkout-service-options">';
+    for (const st of serviceChooser.service_types) {
+      const isActive = st.type === "active";
+      html += '<div class="checkout-service-option' + (isActive ? ' active' : '') + '">';
+      html += '<div class="service-label">' + esc(st.label || st.service_type || "") + '</div>';
+      if (st.bottom_text) html += '<div class="service-detail">' + esc(st.bottom_text) + '</div>';
+      html += '</div>';
     }
-  }
-  if (serviceData || serviceChooser) {
-    const sd = serviceData || serviceChooser || {};
-    const serviceTypes = sd.service_types || [];
-    if (serviceTypes.length > 0) {
-      html += '<div class="checkout-section">';
-      html += '<div class="checkout-section-title">Service Type</div>';
-      html += '<div class="checkout-service-options">';
-      for (const st of serviceTypes) {
-        const isActive = st.type === "active";
-        html += '<div class="checkout-service-option' + (isActive ? ' active' : '') + '">';
-        html += '<div class="service-label">' + esc(st.label || st.service_type || "") + '</div>';
-        if (st.bottom_text) html += '<div class="service-detail">' + esc(st.bottom_text) + '</div>';
-        html += '</div>';
-      }
-      html += '</div></div>';
-    }
+    html += '</div></div>';
   }
 
-  // Extract info from modules + async data
-  let addressHtml = '';
-  let paymentHtml = '';
-  let totalsHtml = '';
-  let reviewTitle = '';
-  let tipHtml = '';
-
-  for (const mod of modules) {
-    const modData = mod.data || {};
-    const asyncData = asyncModules[mod.id] || {};
-    const types = (mod.types || []).join(",");
-
-    // Address
-    if (/address/i.test(types) || /address/i.test(mod.id)) {
-      const addrIds = asyncData.deliverable_address_ids || modData.deliverable_address_ids || [];
-      const selectedAddr = asyncData.selected_address || modData.selected_address;
-      if (selectedAddr) {
-        addressHtml = '<div class="checkout-section"><div class="checkout-section-title">Address</div>' +
-          '<div class="checkout-section-value">' + esc(selectedAddr.formatted_address || selectedAddr.display_text ||
-          [selectedAddr.street, selectedAddr.city, selectedAddr.state, selectedAddr.zip].filter(Boolean).join(", ")) + '</div></div>';
-      } else if (addrIds.length > 0) {
-        addressHtml = '<div class="checkout-section"><div class="checkout-section-title">Address</div>' +
-          '<div class="checkout-section-value">Address on file</div></div>';
-      }
-    }
-
-    // Payment
-    if (/payment/i.test(types) || /payment/i.test(mod.id)) {
-      const methods = asyncData.payment_methods || modData.payment_methods || [];
-      const categories = asyncData.payment_method_categories || modData.payment_method_categories || [];
-      if (methods.length > 0) {
-        const pm = methods[0];
-        paymentHtml = '<div class="checkout-section"><div class="checkout-section-title">Payment</div>' +
-          '<div class="checkout-section-value">' + esc(pm.display_name || pm.label || ((pm.card_type || "Card") + " ending in " + (pm.last_four || "****"))) + '</div></div>';
-      } else if (categories.length > 0) {
-        paymentHtml = '<div class="checkout-section"><div class="checkout-section-title">Payment</div>' +
-          '<div class="checkout-section-value">' + categories.map(function(c) { return esc(c.header || c.category || ""); }).join(", ") + '</div></div>';
-      }
-    }
-
-    // Totals
-    if (/totals/i.test(types) || /totals/i.test(mod.id)) {
-      const lineItems = asyncData.line_items || modData.line_items || [];
-      const total = asyncData.total || modData.total;
-      const tip = asyncData.explicit_tip || modData.explicit_tip;
-
-      if (lineItems.length > 0 || total) {
-        totalsHtml = '<div class="checkout-section"><div class="checkout-section-title">Order Summary</div>';
-        totalsHtml += '<div class="checkout-totals">';
-        for (const li of lineItems) {
-          totalsHtml += '<div class="checkout-total-row"><span>' + esc(li.label || "") + '</span><span>' + esc(li.value || "") + '</span></div>';
-        }
-        if (tip) {
-          const tipVal = (tip.display_value && tip.display_value.strings && tip.display_value.strings[0]) ? tip.display_value.strings[0].value : "";
-          if (tipVal) {
-            totalsHtml += '<div class="checkout-total-row"><span>' + esc(tip.label || "Tip") + '</span><span>' + esc(tipVal) + '</span></div>';
-          }
-        }
-        if (total) {
-          totalsHtml += '<div class="checkout-total-row total-final"><span>' + esc(total.label || "Total") + '</span><span>' + esc(total.value || "") + '</span></div>';
-        }
-        totalsHtml += '</div></div>';
-      }
-    }
-
-    // Review (item count)
-    if (/review/i.test(types) || /review/i.test(mod.id)) {
-      reviewTitle = asyncData.title || modData.title || "";
-    }
+  // Selected time slot
+  if (selectedTimeSlot) {
+    html += '<div class="checkout-section"><div class="checkout-section-title">Selected Time</div>' +
+      '<div class="checkout-section-value">' + esc(selectedTimeSlot.dayLabel + " " + selectedTimeSlot.label) + '</div></div>';
   }
 
-  // Time slots from delivery options
-  if (deliveryOptions) {
-    const tiers = deliveryOptions.tiers || [];
-    const availTiers = tiers.filter(function(t) { return t.is_available; });
-    if (availTiers.length > 0) {
-      html += '<div class="checkout-section"><div class="checkout-section-title">Available Times</div><div class="checkout-section-value">';
-      for (const t of availTiers) {
-        html += '<div>' + esc(t.tier_name || t.type || "") + ': ' + esc(t.primary_label || "") +
-          (t.total_price ? ' — ' + esc(t.total_price) : '') + '</div>';
-      }
-      html += '</div></div>';
-    }
-    if (selectedTimeSlot) {
-      html += '<div class="checkout-section"><div class="checkout-section-title">Selected Time</div>' +
-        '<div class="checkout-section-value">' + esc(selectedTimeSlot.dayLabel + " " + selectedTimeSlot.label) + '</div></div>';
-    }
+  // Cart items summary
+  let subtotal = 0;
+  for (const item of cartItems) {
+    const p = parsePrice(item.price);
+    if (p > 0) subtotal += p * (item.quantity || 1);
   }
 
-  html += addressHtml;
-  html += paymentHtml;
+  html += '<div class="checkout-section"><div class="checkout-section-title">Items (' + cartItems.length + ')</div>';
+  html += '<div class="checkout-section-value" style="max-height:200px;overflow-y:auto;">';
+  for (const item of cartItems) {
+    html += '<div class="item-row" style="padding:4px 0;">';
+    if (item.image) html += '<img class="item-thumb" src="' + esc(item.image) + '" alt="" style="width:28px;height:28px;">';
+    html += '<div class="item-info"><div class="item-name" style="font-size:13px;">' + esc(item.name || item.item || "") + '</div>';
+    html += '<div class="item-detail">' + (item.size ? esc(item.size) + ' - ' : '') + esc(item.price || "") + '</div></div>';
+    html += '<span class="item-qty">x' + (item.quantity || 1) + '</span>';
+    html += '</div>';
+  }
+  html += '</div></div>';
 
-  if (reviewTitle) {
-    html += '<div class="checkout-section"><div class="checkout-section-title">Items</div>' +
-      '<div class="checkout-section-value">' + esc(reviewTitle) + '</div></div>';
+  // Order totals
+  html += '<div class="checkout-section"><div class="checkout-section-title">Order Summary</div>';
+  html += '<div class="checkout-totals">';
+  html += '<div class="checkout-total-row"><span>Subtotal (' + cartItems.length + ' items)</span><span>$' + subtotal.toFixed(2) + '</span></div>';
+
+  // Service fee from delivery options or service chooser
+  let serviceFee = "";
+  if (serviceChooser && serviceChooser.service_types) {
+    const active = serviceChooser.service_types.find(function(st) { return st.type === "active"; });
+    if (active && active.bottom_text) {
+      const feeMatch = active.bottom_text.match(/\$[\d.]+/);
+      if (feeMatch) serviceFee = feeMatch[0];
+    }
+  }
+  if (serviceFee) {
+    html += '<div class="checkout-total-row"><span>Service fee</span><span>' + esc(serviceFee) + '</span></div>';
   }
 
-  html += totalsHtml;
+  const feeNum = parsePrice(serviceFee);
+  const estTotal = subtotal + feeNum;
+  html += '<div class="checkout-total-row total-final"><span>Estimated Total</span><span>$' + estTotal.toFixed(2) + '</span></div>';
+  html += '</div></div>';
 
   body.innerHTML = html;
 }

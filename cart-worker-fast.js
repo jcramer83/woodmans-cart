@@ -872,35 +872,14 @@ async function fetchCheckoutModuleData(session, modulePath, progressCallback) {
 async function fetchCheckoutPreview(session, progressCallback) {
   const progress = progressCallback || (() => {});
 
-  // Fetch all checkout data in parallel
-  const [container, serviceChooser, deliveryOptions] = await Promise.all([
-    fetchCheckoutContainer(session, progress),
+  // Fetch cart items (reliable) + service chooser + delivery options in parallel
+  const [cartItems, serviceChooser, deliveryOptions] = await Promise.all([
+    fetchCart(session, progress).catch(() => []),
     fetchServiceChooser(session, progress).catch(() => null),
     fetchDeliveryOptions(session, progress).catch(() => null),
   ]);
 
-  // Fetch async module data for key modules (totals, payment, review)
-  const asyncModules = {};
-  const modules = container.modules || [];
-  const asyncFetches = [];
-  for (const mod of modules) {
-    if (mod.async_data_path) {
-      const key = mod.id;
-      asyncFetches.push(
-        fetchCheckoutModuleData(session, mod.async_data_path, progress)
-          .then(data => { if (data) asyncModules[key] = data; })
-          .catch(() => {})
-      );
-    }
-  }
-  await Promise.all(asyncFetches);
-
-  return {
-    container,
-    serviceChooser,
-    deliveryOptions,
-    asyncModules,
-  };
+  return { cartItems, serviceChooser, deliveryOptions };
 }
 
 module.exports = {
