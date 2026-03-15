@@ -1647,17 +1647,16 @@ async function fetchTimeSlots() {
     const slotsData = await appApi.fetchTimeSlots(mode).catch(() => null);
 
     if (slotsData && slotsData._pickupFromServiceChooser) {
-      // Fallback: no time slots available (below order minimum or none returned)
+      // Fallback: time slot API didn't return selectable slots
       const sc = slotsData.serviceChooser;
       const pickupInfo = sc && sc.service_types
-        ? sc.service_types.find(function(st) { return st.service_type === "pickup"; })
+        ? sc.service_types.find(function(st) { return st.service_type === "pickup" || st.type === "active"; })
         : null;
-      let msg = "";
-      if (slotsData._belowMinimum) {
-        msg = "Below order minimum — add more items to see pickup time slots.";
-      } else if (pickupInfo && pickupInfo.bottom_text) {
+      let msg = slotsData._errorMsg || "";
+      if (!msg && pickupInfo && pickupInfo.bottom_text) {
         msg = pickupInfo.bottom_text;
-      } else {
+      }
+      if (!msg) {
         msg = "Pickup available — check Woodmans site for times";
       }
       container.innerHTML = '<div class="pickup-info-card">' +

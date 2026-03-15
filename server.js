@@ -579,13 +579,20 @@ function startServer(deps) {
       var options = mode === "pickup"
         ? await fastWorker.fetchPickupOptions(session, sendProgress)
         : await fastWorker.fetchDeliveryOptions(session, sendProgress);
-      var svcOptions = options?.service_options || options;
-      var days = svcOptions?.days || options?.days || [];
-      if (days.length === 0) {
+      if (!options) {
+        // API returned non-200 — fall back to service chooser summary
         var serviceChooser = await fastWorker.fetchServiceChooser(session, sendProgress);
-        return res.json({ _pickupFromServiceChooser: true, serviceChooser: serviceChooser, _belowMinimum: !!(svcOptions?.error_module) });
+        return res.json({ _pickupFromServiceChooser: true, serviceChooser: serviceChooser });
       }
-      return res.json(svcOptions || options);
+      var svcOptions = options?.service_options || options;
+      var days = svcOptions?.days || [];
+      if (days.length === 0) {
+        // API returned OK but no slots — pass through the error_module text if present
+        var errorMsg = svcOptions?.error_module?.title || null;
+        var serviceChooser2 = await fastWorker.fetchServiceChooser(session, sendProgress);
+        return res.json({ _pickupFromServiceChooser: true, serviceChooser: serviceChooser2, _errorMsg: errorMsg });
+      }
+      return res.json(svcOptions);
     } catch (err) {
       return res.json({ error: err.message });
     }

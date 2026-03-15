@@ -890,8 +890,7 @@ async function ensureCheckoutServiceType(session, mode, progressCallback) {
   const progress = progressCallback || (() => {});
   const serviceType = mode === "pickup" ? "pickup" : "delivery";
 
-  if (session._checkoutServiceType === serviceType) return;
-
+  // Always send the PUT — Instacart checkout state can reset between requests
   progress("Setting checkout to " + serviceType + "...");
   const res = await withRetry(() => v3Put(session.cookies, "/v3/orders/new", {
     service_type: serviceType,
@@ -904,8 +903,6 @@ async function ensureCheckoutServiceType(session, mode, progressCallback) {
       ["retailer_locations[" + RETAILER_ID + "]"]: PICKUP_LOCATION_ID,
     }));
   }
-
-  session._checkoutServiceType = serviceType;
 }
 
 async function fetchPickupOptions(session, progressCallback) {
