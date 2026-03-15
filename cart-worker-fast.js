@@ -952,14 +952,16 @@ async function fetchCheckoutPreview(session, mode, progressCallback) {
   // Switch checkout to the correct service type before fetching anything
   await ensureCheckoutServiceType(session, mode, progress);
 
-  // Fetch cart items + service chooser + time slots + real totals in parallel
+  // Fetch cart items + service chooser + time slots in parallel
   const isPickup = mode === "pickup";
-  const [cartItems, serviceChooser, timeSlots, checkoutTotals] = await Promise.all([
+  const [cartItems, serviceChooser, timeSlots] = await Promise.all([
     fetchCart(session, progress).catch(() => []),
     fetchServiceChooser(session, progress).catch(() => null),
     (isPickup ? fetchPickupOptions(session, progress) : fetchDeliveryOptions(session, progress)).catch(() => null),
-    fetchCheckoutTotals(session, mode, progress).catch(() => null),
   ]);
+
+  // Fetch totals separately — Instacart needs a moment after service type switch
+  const checkoutTotals = await fetchCheckoutTotals(session, mode, progress).catch(() => null);
 
   return { cartItems, serviceChooser, timeSlots, checkoutTotals };
 }

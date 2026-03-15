@@ -1847,18 +1847,30 @@ function renderCheckoutPreview(data, body) {
   html += '<div class="checkout-section"><div class="checkout-section-title">Order Summary</div>';
   html += '<div class="checkout-totals">';
 
-  if (checkoutTotals && checkoutTotals.line_items) {
+  // Check if we have real totals from Woodmans (must have line_items with actual values AND a total)
+  var hasRealTotals = checkoutTotals && checkoutTotals.line_items && checkoutTotals.line_items.length > 0
+    && checkoutTotals.total && parsePrice(checkoutTotals.total.value) > 0;
+
+  // Always calculate subtotal from cart items as baseline
+  var subtotal = 0;
+  for (var i = 0; i < cartItems.length; i++) {
+    var p = parsePrice(cartItems[i].price);
+    if (p > 0) subtotal += p * (cartItems[i].quantity || 1);
+  }
+
+  var slotFee = selectedTimeSlot ? parsePrice(selectedTimeSlot.price) : 0;
+  var feeLabel = activeServiceType === "pickup" ? "Pickup fee" : "Delivery fee";
+
+  if (hasRealTotals) {
     // Real totals from Woodmans checkout API
-    for (const li of checkoutTotals.line_items) {
+    for (var j = 0; j < checkoutTotals.line_items.length; j++) {
+      var li = checkoutTotals.line_items[j];
       if (!li.value) continue;
       html += '<div class="checkout-total-row"><span>' + esc(li.label || "") + '</span><span>' + esc(li.value) + '</span></div>';
     }
-    // Add pickup/delivery fee from selected time slot (Woodmans doesn't include it in totals API)
-    var slotFee = selectedTimeSlot ? parsePrice(selectedTimeSlot.price) : 0;
     if (slotFee > 0) {
-      html += '<div class="checkout-total-row"><span>' + (activeServiceType === "pickup" ? "Pickup" : "Delivery") + ' fee</span><span>$' + slotFee.toFixed(2) + '</span></div>';
+      html += '<div class="checkout-total-row"><span>' + feeLabel + '</span><span>$' + slotFee.toFixed(2) + '</span></div>';
     }
-    // Show tip if present (delivery mode)
     if (checkoutTotals.explicit_tip && activeServiceType === "delivery") {
       var tipVal = checkoutTotals.explicit_tip.display_value;
       var tipStr = tipVal && tipVal.strings && tipVal.strings[0] ? tipVal.strings[0].value : "";
@@ -1866,24 +1878,16 @@ function renderCheckoutPreview(data, body) {
         html += '<div class="checkout-total-row"><span>' + esc(checkoutTotals.explicit_tip.label || "Tip") + '</span><span>' + esc(tipStr) + '</span></div>';
       }
     }
-    // Final total = Woodmans total + slot fee + tip
-    var woodmansTotal = parsePrice(checkoutTotals.total ? checkoutTotals.total.value : "");
+    var woodmansTotal = parsePrice(checkoutTotals.total.value);
     var tipAmount = (checkoutTotals.explicit_tip && activeServiceType === "delivery") ? (checkoutTotals.selected_amounts?.initial_tip || 0) : 0;
-    var grandTotal = woodmansTotal + slotFee + tipAmount;
-    html += '<div class="checkout-total-row total-final"><span>Total</span><span>$' + grandTotal.toFixed(2) + '</span></div>';
+    html += '<div class="checkout-total-row total-final"><span>Total</span><span>$' + (woodmansTotal + slotFee + tipAmount).toFixed(2) + '</span></div>';
   } else {
-    // Fallback: calculate from cart items
-    var subtotal = 0;
-    for (var i = 0; i < cartItems.length; i++) {
-      var p = parsePrice(cartItems[i].price);
-      if (p > 0) subtotal += p * (cartItems[i].quantity || 1);
-    }
+    // Fallback: use cart item prices
     html += '<div class="checkout-total-row"><span>Subtotal (' + cartItems.length + ' items)</span><span>$' + subtotal.toFixed(2) + '</span></div>';
-    if (selectedTimeSlot && selectedTimeSlot.price) {
-      html += '<div class="checkout-total-row"><span>' + (activeServiceType === "pickup" ? "Pickup" : "Delivery") + ' fee</span><span>' + esc(selectedTimeSlot.price) + '</span></div>';
+    if (slotFee > 0) {
+      html += '<div class="checkout-total-row"><span>' + feeLabel + '</span><span>$' + slotFee.toFixed(2) + '</span></div>';
     }
-    var feeNum = selectedTimeSlot ? parsePrice(selectedTimeSlot.price) : 0;
-    html += '<div class="checkout-total-row total-final"><span>Estimated Total</span><span>$' + (subtotal + feeNum).toFixed(2) + '</span></div>';
+    html += '<div class="checkout-total-row total-final"><span>Estimated Total</span><span>$' + (subtotal + slotFee).toFixed(2) + '</span></div>';
   }
   html += '</div></div>';
 
