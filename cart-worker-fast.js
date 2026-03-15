@@ -1047,23 +1047,29 @@ async function placeOrder(session, mode, slotId, settings, progressCallback) {
   const phoneNumber = (settings && settings.phoneNumber) || process.env.PHONE_NUMBER || "";
   if (!phoneNumber) throw new Error("Phone number required. Set PHONE_NUMBER env var or add phoneNumber to settings.");
 
-  // Fetch payment method
+  // Fetch payment method from checkout container (has correct preselected_payment_instructions format)
   progress("Checking payment method...");
-  const payRes = await withRetry(() => v3Get(session.cookies, "/v3/module_data/paymentmethodchooserv2"));
-  const payData = payRes.body?.module_data;
-  let paymentInstructions = payData?.preselected_payment_instructions;
+  const containerRes = await withRetry(() => v3Get(session.cookies, "/v3/containers/checkout"));
+  const payMod = (containerRes.body?.container?.modules || []).find(function (m) {
+    return m.types && m.types.some(function (t) { return t.includes("payment"); });
+  });
+  let paymentInstructions = payMod?.data?.preselected_payment_instructions;
 
-  // If no preselected instructions, build from available payment methods
+  // If checkout container doesn't have preselected instructions, build from payment methods
   if (!paymentInstructions || paymentInstructions.length === 0) {
-    const methods = payData?.payment_methods || [];
+    const payRes = await withRetry(() => v3Get(session.cookies, "/v3/module_data/paymentmethodchooserv2"));
+    const methods = payRes.body?.module_data?.payment_methods || [];
     if (methods.length === 0) {
       throw new Error("No payment method on file. Add a credit/debit card at shopwoodmans.com first.");
     }
-    // Use the default card, or fall back to the first one
-    const defaultMethod = methods.find(function (m) { return m.data?.attributes?.includes("default"); }) || methods[0];
-    if (defaultMethod && defaultMethod.data?.id) {
-      paymentInstructions = [{ payment_method_id: defaultMethod.data.id }];
-      progress("Using " + (defaultMethod.data.label || "card") + " for payment...");
+    const card = methods.find(function (m) { return m.data?.attributes?.includes("default"); }) || methods[0];
+    if (card && card.data?.id) {
+      paymentInstructions = [{
+        payment_instrument_id: card.data.id,
+        payment_instrument_type: card.type || "credit_card",
+        label: card.data.label || "",
+      }];
+      progress("Using " + (card.data.label || "card") + " for payment...");
     } else {
       throw new Error("No usable payment method found. Add a credit/debit card at shopwoodmans.com first.");
     }
