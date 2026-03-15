@@ -1804,28 +1804,39 @@ function renderCheckoutPreview(data, body) {
     return;
   }
 
+  const currentMode = settings.shoppingMode || "instore";
+  const isPickup = currentMode === "pickup";
+  const activeServiceType = isPickup ? "pickup" : "delivery";
+
+  // Update Place Order button state
+  var placeBtn = document.getElementById("btn-place-order");
+  if (placeBtn) {
+    if (isPickup) {
+      placeBtn.disabled = false;
+      placeBtn.style.opacity = "";
+      placeBtn.title = "";
+    } else {
+      placeBtn.disabled = true;
+      placeBtn.style.opacity = "0.4";
+      placeBtn.title = "Order placement is only available in pickup mode";
+    }
+  }
+
   let html = '';
 
-  // Service type — show which mode is active
-  const currentMode = settings.shoppingMode || "instore";
-  const activeServiceType = currentMode === "pickup" ? "pickup" : "delivery";
+  // Service type
+  html += '<div class="checkout-section"><div class="checkout-section-title">Service Type</div>';
+  html += '<div class="checkout-section-value" style="font-weight:600;">' + (isPickup ? 'Pickup' : 'In-Store') + '</div>';
   if (serviceChooser && serviceChooser.service_types) {
-    html += '<div class="checkout-section">';
-    html += '<div class="checkout-section-title">Service Type</div>';
-    html += '<div class="checkout-service-options">';
-    for (const st of serviceChooser.service_types) {
-      const isActive = st.type === "active" || st.service_type === activeServiceType;
-      html += '<div class="checkout-service-option' + (isActive ? ' active' : '') + '">';
-      html += '<div class="service-label">' + esc(st.label || st.service_type || "") + '</div>';
-      if (st.bottom_text) html += '<div class="service-detail">' + esc(st.bottom_text) + '</div>';
-      html += '</div>';
+    var activeType = serviceChooser.service_types.find(function(st) { return st.type === "active"; });
+    if (activeType && activeType.bottom_text) {
+      html += '<div class="checkout-section-value" style="color:#888;font-size:13px;">' + esc(activeType.bottom_text) + '</div>';
     }
-    html += '</div></div>';
-  } else {
-    // Fallback: just show the current mode
-    html += '<div class="checkout-section"><div class="checkout-section-title">Service Type</div>' +
-      '<div class="checkout-section-value">' + esc(activeServiceType === "pickup" ? "Pickup" : "Delivery") + '</div></div>';
   }
+  if (!isPickup) {
+    html += '<div class="checkout-section-value" style="color:#e74c3c;font-size:13px;">Switch to Pickup mode to place orders</div>';
+  }
+  html += '</div>';
 
   // Selected time slot
   if (selectedTimeSlot) {
