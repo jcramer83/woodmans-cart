@@ -608,22 +608,27 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
   return { results, cartItems };
 }
 
-// --- V3 REST helper for cart reading ---
+// --- V3 REST helpers ---
 
-function v3Get(cookieString, path) {
+const V3_HEADERS_BASE = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Accept: "application/json",
+  "x-client-identifier": "web",
+  "X-Requested-With": "XMLHttpRequest",
+  Referer: "https://shopwoodmans.com/store/woodmans-food-markets/checkout",
+  Origin: "https://shopwoodmans.com",
+};
+
+function v3Request(cookieString, method, path, body) {
   return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: "shopwoodmans.com",
-      path,
-      method: "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json",
-        Cookie: cookieString,
-        Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
-        "x-client-identifier": "web",
-      },
-    }, (res) => {
+    const headers = { ...V3_HEADERS_BASE, Cookie: cookieString };
+    let bodyStr;
+    if (body) {
+      bodyStr = JSON.stringify(body);
+      headers["Content-Type"] = "application/json";
+      headers["Content-Length"] = Buffer.byteLength(bodyStr);
+    }
+    const req = https.request({ hostname: "shopwoodmans.com", path, method, headers }, (res) => {
       let data = "";
       res.on("data", (c) => (data += c));
       res.on("end", () => {
@@ -633,40 +638,14 @@ function v3Get(cookieString, path) {
     });
     req.on("error", reject);
     req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
+    if (bodyStr) req.write(bodyStr);
     req.end();
   });
 }
 
-function v3Post(cookieString, path, body) {
-  return new Promise((resolve, reject) => {
-    const bodyStr = JSON.stringify(body || {});
-    const req = https.request({
-      hostname: "shopwoodmans.com",
-      path,
-      method: "POST",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(bodyStr),
-        Cookie: cookieString,
-        Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
-        "x-client-identifier": "web",
-      },
-    }, (res) => {
-      let data = "";
-      res.on("data", (c) => (data += c));
-      res.on("end", () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
-      });
-    });
-    req.on("error", reject);
-    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
-    req.write(bodyStr);
-    req.end();
-  });
-}
+function v3Get(cookieString, path) { return v3Request(cookieString, "GET", path); }
+function v3Post(cookieString, path, body) { return v3Request(cookieString, "POST", path, body || {}); }
+function v3Put(cookieString, path, body) { return v3Request(cookieString, "PUT", path, body || {}); }
 
 // --- Cart fetch via V3 REST API ---
 
@@ -900,55 +879,63 @@ async function fetchCheckoutModuleData(session, modulePath, progressCallback) {
   return res.body?.module_data || res.body;
 }
 
+// Pickup location ID for Racine store (from checkout container retailer_locations)
+const PICKUP_LOCATION_ID = "498198";
+
 // Switch the checkout's service type (pickup vs delivery).
 // This is separate from ensureShoppingMode which switches the cart shop.
-// The checkout system on Instacart tracks service type independently via /v3/orders/new.
+// The checkout system on Instacart tracks service type independently.
+// Requires PUT to /v3/orders/new with X-Requested-With header.
 async function ensureCheckoutServiceType(session, mode, progressCallback) {
   const progress = progressCallback || (() => {});
   const serviceType = mode === "pickup" ? "pickup" : "delivery";
 
-  // Skip if we already set this checkout service type in this session
   if (session._checkoutServiceType === serviceType) return;
 
   progress("Setting checkout to " + serviceType + "...");
-  const res = await withRetry(() => v3Post(session.cookies, "/v3/orders/new", {
+  const res = await withRetry(() => v3Put(session.cookies, "/v3/orders/new", {
     service_type: serviceType,
   }));
   if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
+
+  // For pickup, also set the retailer location (required for pickup_options)
+  if (serviceType === "pickup") {
+    await withRetry(() => v3Put(session.cookies, "/v3/orders/new", {
+      ["retailer_locations[" + RETAILER_ID + "]"]: PICKUP_LOCATION_ID,
+    }));
+  }
+
   session._checkoutServiceType = serviceType;
 }
 
-async function fetchCheckoutTotals(session, progressCallback) {
+async function fetchPickupOptions(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Fetching pickup time slots...");
+  const path = "/v3/retailers/" + RETAILER_ID + "/pickup_options?retailer_locations%5B" + RETAILER_ID + "%5D=" + PICKUP_LOCATION_ID;
+  const res = await withRetry(() => v3Get(session.cookies, path));
+  if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
+  if (res.status !== 200) return null;
+  return res.body?.service_options || res.body;
+}
+
+async function fetchCheckoutTotals(session, mode, progressCallback) {
   const progress = progressCallback || (() => {});
   progress("Fetching checkout totals...");
-
-  // Get the checkout container to find the totals module's async_data_path
-  const containerRes = await withRetry(() => v3Get(session.cookies, "/v3/containers/checkout"));
-  if (isSessionExpired(containerRes)) { closeFastSession(); throw new Error("Session expired"); }
-  if (containerRes.status !== 200) return null;
-
-  const modules = containerRes.body?.container?.modules || [];
-  const totalsModule = modules.find(function (m) {
-    return m.types && m.types.includes("checkout/checkout_totals");
-  });
-
-  if (!totalsModule || !totalsModule.async_data_path) return null;
-
-  progress("Fetching order totals...");
-  const totalsRes = await withRetry(() => v3Get(session.cookies, totalsModule.async_data_path));
+  // Fetch totals directly with the correct service_type parameter
+  const serviceType = mode === "pickup" ? "pickup" : "delivery";
+  const totalsRes = await withRetry(() => v3Get(session.cookies,
+    "/v3/module_data/checkouttotals?one_tap_apple_pay=false&service_type=" + serviceType));
+  if (isSessionExpired(totalsRes)) { closeFastSession(); throw new Error("Session expired"); }
   if (totalsRes.status !== 200) return null;
-
   return totalsRes.body?.module_data || null;
 }
 
 async function selectDeliveryOption(session, optionId, progressCallback) {
   const progress = progressCallback || (() => {});
   progress("Selecting time slot...");
-
-  // POST to /v3/orders/new with the delivery option parameter
   const body = {};
   body["deliveries[" + RETAILER_ID + "]"] = optionId;
-  const res = await withRetry(() => v3Post(session.cookies, "/v3/orders/new", body));
+  const res = await withRetry(() => v3Put(session.cookies, "/v3/orders/new", body));
   if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
   return res.body;
 }
@@ -957,14 +944,10 @@ async function selectDeliveryOption(session, optionId, progressCallback) {
 // To place an order, POST to /v3/orders (from checkout create_order action).
 // This is intentionally NOT implemented as a function — documented here for reference only.
 // The checkout flow requires:
-//   1. Service type selected (pickup/delivery) via ensureCheckoutServiceType()
-//   2. Time slot selected via selectDeliveryOption()
-//   3. Payment method configured on the Instacart/Woodmans account
-//   4. POST /v3/orders → creates the order
-// The "Place order" button in Instacart checkout calls:
-//   POST https://shopwoodmans.com/v3/orders
-// with the session cookies. No additional body is needed — all checkout state
-// (service type, time slot, payment) is stored server-side on Instacart.
+//   1. ensureCheckoutServiceType() — switches checkout to pickup or delivery
+//   2. selectDeliveryOption() — reserves a time slot
+//   3. Payment method already configured on the Instacart/Woodmans account
+//   4. POST /v3/orders → creates the order (all state is server-side)
 
 async function fetchCheckoutPreview(session, mode, progressCallback) {
   const progress = progressCallback || (() => {});
@@ -972,15 +955,16 @@ async function fetchCheckoutPreview(session, mode, progressCallback) {
   // Switch checkout to the correct service type before fetching anything
   await ensureCheckoutServiceType(session, mode, progress);
 
-  // Fetch cart items + service chooser + delivery options + real totals in parallel
-  const [cartItems, serviceChooser, deliveryOptions, checkoutTotals] = await Promise.all([
+  // Fetch cart items + service chooser + time slots + real totals in parallel
+  const isPickup = mode === "pickup";
+  const [cartItems, serviceChooser, timeSlots, checkoutTotals] = await Promise.all([
     fetchCart(session, progress).catch(() => []),
     fetchServiceChooser(session, progress).catch(() => null),
-    fetchDeliveryOptions(session, progress).catch(() => null),
-    fetchCheckoutTotals(session, progress).catch(() => null),
+    (isPickup ? fetchPickupOptions(session, progress) : fetchDeliveryOptions(session, progress)).catch(() => null),
+    fetchCheckoutTotals(session, mode, progress).catch(() => null),
   ]);
 
-  return { cartItems, serviceChooser, deliveryOptions, checkoutTotals };
+  return { cartItems, serviceChooser, timeSlots, checkoutTotals };
 }
 
 module.exports = {
@@ -994,6 +978,7 @@ module.exports = {
   copyCart,
   fetchServiceChooser,
   fetchDeliveryOptions,
+  fetchPickupOptions,
   fetchCheckoutContainer,
   fetchCheckoutPreview,
   fetchCheckoutTotals,

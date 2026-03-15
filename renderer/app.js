@@ -1703,7 +1703,7 @@ function renderTimeSlots(data, container) {
     html += '<div class="timeslot-slots">';
 
     for (const opt of options) {
-      const label = opt.pickup_full_window || opt.window || opt.formatted_time_range || opt.label || "";
+      const label = opt.window || opt.formatted_time_range || opt.label || "";
       const attrs = opt.attributes || [];
       const available = attrs.includes("available");
       const optionId = opt.id || opt.option_id || "";
@@ -1785,7 +1785,7 @@ async function openCheckoutPreview() {
 function renderCheckoutPreview(data, body) {
   const cartItems = data.cartItems || [];
   const serviceChooser = data.serviceChooser;
-  const deliveryOptions = data.deliveryOptions;
+  const timeSlots = data.timeSlots;
   const checkoutTotals = data.checkoutTotals;
 
   if (cartItems.length === 0) {

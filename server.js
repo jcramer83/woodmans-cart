@@ -574,10 +574,11 @@ function startServer(deps) {
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
-      // Switch checkout service type so delivery_options returns correct slots
       await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
-      var options = await fastWorker.fetchDeliveryOptions(session, sendProgress);
-      // If no slots available (e.g. below order minimum), include service chooser as fallback
+      // Use pickup_options for pickup mode, delivery_options for delivery
+      var options = mode === "pickup"
+        ? await fastWorker.fetchPickupOptions(session, sendProgress)
+        : await fastWorker.fetchDeliveryOptions(session, sendProgress);
       var svcOptions = options?.service_options || options;
       var days = svcOptions?.days || options?.days || [];
       if (days.length === 0) {
