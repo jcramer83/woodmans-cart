@@ -658,14 +658,23 @@ function startServer(deps) {
     var slotId = req.body && req.body.slotId;
     if (!slotId) return res.json({ error: "No time slot selected" });
     var fastWorker = require("./cart-worker-fast");
-    try {
-      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
-      await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
-      var result = await fastWorker.placeOrder(session, mode, slotId, currentSettings, sendProgress);
-      return res.json({ ok: true, result: result });
-    } catch (err) {
-      return res.json({ error: err.message });
+    var attempts = 0;
+    while (attempts < 2) {
+      try {
+        var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+        await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+        await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
+        var result = await fastWorker.placeOrder(session, mode, slotId, currentSettings, sendProgress);
+        return res.json({ ok: true, result: result });
+      } catch (err) {
+        attempts++;
+        if (attempts < 2 && /session expired/i.test(err.message)) {
+          sendProgress("Session expired, retrying with fresh login...");
+          fastWorker.closeFastSession();
+          continue;
+        }
+        return res.json({ error: err.message });
+      }
     }
   });
 
