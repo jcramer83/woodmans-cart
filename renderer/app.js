@@ -1804,7 +1804,7 @@ function renderCheckoutPreview(data, body) {
     return;
   }
 
-  let html = '<div class="checkout-warning">Preview only — this will NOT place an order.</div>';
+  let html = '';
 
   // Service type — show which mode is active
   const currentMode = settings.shoppingMode || "instore";
