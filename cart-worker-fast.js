@@ -938,21 +938,54 @@ async function selectDeliveryOption(session, optionId, progressCallback) {
 }
 
 // --- Order placement ---
-// Places the order via POST /v3/orders. All checkout state (service type,
-// time slot, payment) is stored server-side on Instacart. Requires:
-//   1. ensureCheckoutServiceType() — switches checkout to pickup or delivery
-//   2. selectDeliveryOption() — reserves a time slot
-//   3. Payment method already configured on the Instacart/Woodmans account
+// POST /v3/orders with all checkout params in the body.
+// The PUT to /v3/orders/new doesn't persist state for order creation —
+// all params must be sent directly in the POST body.
 
-async function placeOrder(session, progressCallback) {
+async function placeOrder(session, mode, slotId, progressCallback) {
   const progress = progressCallback || (() => {});
+  if (!slotId) throw new Error("No time slot selected");
+
+  // Fetch payment method
+  progress("Checking payment method...");
+  const payRes = await withRetry(() => v3Get(session.cookies, "/v3/module_data/paymentmethodchooserv2"));
+  const payData = payRes.body?.module_data;
+  const paymentInstructions = payData?.preselected_payment_instructions;
+  if (!paymentInstructions || paymentInstructions.length === 0) {
+    // Check if there are any payment methods at all
+    const methods = payData?.payment_methods || [];
+    if (methods.length === 0) {
+      throw new Error("No payment method on file. Add a credit/debit card at shopwoodmans.com first.");
+    }
+    throw new Error("No payment method selected. Configure payment at shopwoodmans.com first.");
+  }
+
+  const serviceType = mode === "pickup" ? "pickup" : "delivery";
+  const body = {
+    service_type: serviceType,
+    user_phone: session._userPhone || "",
+    payment_instructions: paymentInstructions,
+  };
+  body["deliveries[" + RETAILER_ID + "]"] = String(slotId);
+  if (serviceType === "pickup") {
+    body["retailer_locations[" + RETAILER_ID + "]"] = PICKUP_LOCATION_ID;
+  }
+
   progress("Placing order...");
-  const res = await withRetry(() => v3Post(session.cookies, "/v3/orders"));
+  const res = await v3Post(session.cookies, "/v3/orders", body);
   if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
   if (res.status !== 200 && res.status !== 201) {
     const errMsg = res.body?.error?.message || res.body?.errors?.[0]?.message || "Order failed (status " + res.status + ")";
     throw new Error(errMsg);
   }
+
+  // Check for creation errors (e.g. payment issues)
+  const meta = res.body?.meta;
+  if (meta && meta.success === false) {
+    const errors = meta.creation_errors || [];
+    throw new Error(errors.join("; ") || "Order creation failed");
+  }
+
   progress("Order placed!");
   return res.body;
 }

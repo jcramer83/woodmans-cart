@@ -1908,7 +1908,7 @@ async function placeOrder() {
 
   try {
     const mode = settings.shoppingMode || "instore";
-    const result = await appApi.placeOrder(mode);
+    const result = await appApi.placeOrder(mode, selectedTimeSlot.optionId);
     if (result.error) {
       showToast("Order failed: " + result.error, "error");
       btn.textContent = "Place Order";

@@ -620,12 +620,14 @@ function startServer(deps) {
   app.post("/api/checkout/place-order", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};
     var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
+    var slotId = req.body && req.body.slotId;
+    if (!slotId) return res.json({ error: "No time slot selected" });
     var fastWorker = require("./cart-worker-fast");
     try {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
       await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
-      var result = await fastWorker.placeOrder(session, sendProgress);
+      var result = await fastWorker.placeOrder(session, mode, slotId, sendProgress);
       return res.json({ ok: true, result: result });
     } catch (err) {
       return res.json({ error: err.message });
