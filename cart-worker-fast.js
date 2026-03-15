@@ -1044,8 +1044,8 @@ async function selectDeliveryOption(session, optionId, progressCallback) {
 async function placeOrder(session, mode, slotId, settings, progressCallback) {
   const progress = progressCallback || (() => {});
   if (!slotId) throw new Error("No time slot selected");
-  const phoneNumber = (settings && settings.phoneNumber) || "";
-  if (!phoneNumber) throw new Error("Phone number required. Add it in Settings.");
+  const phoneNumber = (settings && settings.phoneNumber) || process.env.PHONE_NUMBER || "";
+  if (!phoneNumber) throw new Error("Phone number required. Set PHONE_NUMBER env var or add phoneNumber to settings.");
 
   // Fetch payment method
   progress("Checking payment method...");
