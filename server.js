@@ -634,6 +634,24 @@ function startServer(deps) {
     }
   });
 
+  // Get current shopping mode
+  app.get("/api/shopping-mode", function (req, res) {
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    return res.json({ shoppingMode: currentSettings.shoppingMode || "instore" });
+  });
+
+  // Switch shopping mode (pickup or instore)
+  app.post("/api/shopping-mode", function (req, res) {
+    var mode = req.body && req.body.shoppingMode;
+    if (mode !== "pickup" && mode !== "instore") {
+      return res.json({ error: "shoppingMode must be 'pickup' or 'instore'" });
+    }
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    currentSettings.shoppingMode = mode;
+    writeJSON(SETTINGS_PATH, currentSettings);
+    return res.json({ ok: true, shoppingMode: mode });
+  });
+
   // Fetch service chooser (delivery vs pickup options)
   app.post("/api/checkout/service-options", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};
