@@ -1708,13 +1708,13 @@ function renderTimeSlots(data, container) {
       const available = attrs.includes("available");
       const optionId = opt.id || opt.option_id || "";
       const isSelected = selectedTimeSlot && selectedTimeSlot.optionId === optionId;
-      const price = opt.price || ""; // Show per-slot price (pickup/delivery fee)
+      const price = opt.price || "";
 
       html += '<div class="timeslot-chip' +
         (isSelected ? ' selected' : '') +
         (!available ? ' unavailable' : '') +
-        '" onclick="' + (available ? "selectTimeSlot('" + esc(optionId) + "','" + esc(label) + "','" + esc(dayLabel) + "')" : "") +
-        '" title="' + esc(opt.full_window || label) + '">' +
+        '" onclick="' + (available ? "selectTimeSlot('" + esc(optionId) + "','" + esc(label) + "','" + esc(dayLabel) + "','" + esc(price) + "')" : "") +
+        '" title="' + esc(opt.pickup_full_window || opt.full_window || label) + '">' +
         esc(label) +
         (price ? '<span class="timeslot-price">' + esc(price) + '</span>' : '') +
         '</div>';
@@ -1730,8 +1730,8 @@ function renderTimeSlots(data, container) {
   }
 }
 
-async function selectTimeSlot(optionId, label, dayLabel) {
-  selectedTimeSlot = { optionId, label, dayLabel };
+async function selectTimeSlot(optionId, label, dayLabel, price) {
+  selectedTimeSlot = { optionId, label, dayLabel, price: price || "" };
   const selectedEl = document.getElementById("timeslot-selected");
   if (selectedEl) selectedEl.textContent = dayLabel + " " + label;
   // Re-render to update selected state
@@ -1748,6 +1748,7 @@ async function selectTimeSlot(optionId, label, dayLabel) {
   }
   // Actually select the time slot on Woodmans
   const mode = settings.shoppingMode || "instore";
+  const statusLine = document.getElementById("cart-status-line");
   try {
     const result = await appApi.selectTimeSlot(optionId, mode);
     if (result.error) {
@@ -1757,6 +1758,8 @@ async function selectTimeSlot(optionId, label, dayLabel) {
     }
   } catch (err) {
     showToast("Selected locally: " + dayLabel + " " + label, "success");
+  } finally {
+    if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
   }
 }
 
@@ -1785,7 +1788,6 @@ async function openCheckoutPreview() {
 function renderCheckoutPreview(data, body) {
   const cartItems = data.cartItems || [];
   const serviceChooser = data.serviceChooser;
-  const timeSlots = data.timeSlots;
   const checkoutTotals = data.checkoutTotals;
 
   if (cartItems.length === 0) {
@@ -1796,7 +1798,7 @@ function renderCheckoutPreview(data, body) {
 
   let html = '<div class="checkout-warning">Preview only — this will NOT place an order.</div>';
 
-  // Service type — highlight the one matching current shopping mode
+  // Service type — show which mode is active
   const currentMode = settings.shoppingMode || "instore";
   const activeServiceType = currentMode === "pickup" ? "pickup" : "delivery";
   if (serviceChooser && serviceChooser.service_types) {
@@ -1804,20 +1806,26 @@ function renderCheckoutPreview(data, body) {
     html += '<div class="checkout-section-title">Service Type</div>';
     html += '<div class="checkout-service-options">';
     for (const st of serviceChooser.service_types) {
-      const isActive = st.service_type === activeServiceType;
+      const isActive = st.type === "active" || st.service_type === activeServiceType;
       html += '<div class="checkout-service-option' + (isActive ? ' active' : '') + '">';
       html += '<div class="service-label">' + esc(st.label || st.service_type || "") + '</div>';
       if (st.bottom_text) html += '<div class="service-detail">' + esc(st.bottom_text) + '</div>';
       html += '</div>';
     }
     html += '</div></div>';
+  } else {
+    // Fallback: just show the current mode
+    html += '<div class="checkout-section"><div class="checkout-section-title">Service Type</div>' +
+      '<div class="checkout-section-value">' + esc(activeServiceType === "pickup" ? "Pickup" : "Delivery") + '</div></div>';
   }
 
   // Selected time slot
   if (selectedTimeSlot) {
     html += '<div class="checkout-section"><div class="checkout-section-title">Selected ' +
       (activeServiceType === "pickup" ? "Pickup" : "Delivery") + ' Time</div>' +
-      '<div class="checkout-section-value">' + esc(selectedTimeSlot.dayLabel + " " + selectedTimeSlot.label) + '</div></div>';
+      '<div class="checkout-section-value">' + esc(selectedTimeSlot.dayLabel + " " + selectedTimeSlot.label) +
+      (selectedTimeSlot.price ? ' <span style="color:#888;">(' + esc(selectedTimeSlot.price) + ' fee)</span>' : '') +
+      '</div></div>';
   } else {
     html += '<div class="checkout-section"><div class="checkout-section-title">Selected Time</div>' +
       '<div class="checkout-section-value" style="color:#e74c3c;">No time slot selected — choose one above before placing order</div></div>';
@@ -1836,52 +1844,47 @@ function renderCheckoutPreview(data, body) {
   }
   html += '</div></div>';
 
-  // Order totals — use real totals from Woodmans if available
+  // Order totals
   html += '<div class="checkout-section"><div class="checkout-section-title">Order Summary</div>';
   html += '<div class="checkout-totals">';
 
   if (checkoutTotals && checkoutTotals.line_items) {
     // Real totals from Woodmans checkout API
     for (const li of checkoutTotals.line_items) {
-      if (!li.value || li.value === "$0.00") continue;
+      if (!li.value) continue;
       html += '<div class="checkout-total-row"><span>' + esc(li.label || "") + '</span><span>' + esc(li.value) + '</span></div>';
     }
-    if (checkoutTotals.total) {
-      html += '<div class="checkout-total-row total-final"><span>' + esc(checkoutTotals.total.label || "Total") + '</span><span>' + esc(checkoutTotals.total.value) + '</span></div>';
+    // Add pickup/delivery fee from selected time slot (Woodmans doesn't include it in totals API)
+    var slotFee = selectedTimeSlot ? parsePrice(selectedTimeSlot.price) : 0;
+    if (slotFee > 0) {
+      html += '<div class="checkout-total-row"><span>' + (activeServiceType === "pickup" ? "Pickup" : "Delivery") + ' fee</span><span>$' + slotFee.toFixed(2) + '</span></div>';
     }
-    // Show tip info if present (delivery mode)
+    // Show tip if present (delivery mode)
     if (checkoutTotals.explicit_tip && activeServiceType === "delivery") {
-      const tipVal = checkoutTotals.explicit_tip.display_value;
-      const tipStr = tipVal && tipVal.strings && tipVal.strings[0] ? tipVal.strings[0].value : "";
+      var tipVal = checkoutTotals.explicit_tip.display_value;
+      var tipStr = tipVal && tipVal.strings && tipVal.strings[0] ? tipVal.strings[0].value : "";
       if (tipStr) {
-        html += '<div class="checkout-total-row" style="color:#888;"><span>' + esc(checkoutTotals.explicit_tip.label || "Tip") + '</span><span>' + esc(tipStr) + '</span></div>';
+        html += '<div class="checkout-total-row"><span>' + esc(checkoutTotals.explicit_tip.label || "Tip") + '</span><span>' + esc(tipStr) + '</span></div>';
       }
     }
+    // Final total = Woodmans total + slot fee + tip
+    var woodmansTotal = parsePrice(checkoutTotals.total ? checkoutTotals.total.value : "");
+    var tipAmount = (checkoutTotals.explicit_tip && activeServiceType === "delivery") ? (checkoutTotals.selected_amounts?.initial_tip || 0) : 0;
+    var grandTotal = woodmansTotal + slotFee + tipAmount;
+    html += '<div class="checkout-total-row total-final"><span>Total</span><span>$' + grandTotal.toFixed(2) + '</span></div>';
   } else {
     // Fallback: calculate from cart items
-    let subtotal = 0;
-    for (const item of cartItems) {
-      const p = parsePrice(item.price);
-      if (p > 0) subtotal += p * (item.quantity || 1);
+    var subtotal = 0;
+    for (var i = 0; i < cartItems.length; i++) {
+      var p = parsePrice(cartItems[i].price);
+      if (p > 0) subtotal += p * (cartItems[i].quantity || 1);
     }
     html += '<div class="checkout-total-row"><span>Subtotal (' + cartItems.length + ' items)</span><span>$' + subtotal.toFixed(2) + '</span></div>';
-
-    let serviceFee = "";
-    if (serviceChooser && serviceChooser.service_types) {
-      const matchingService = serviceChooser.service_types.find(function(st) { return st.service_type === activeServiceType; });
-      if (matchingService && matchingService.bottom_text) {
-        const feeMatch = matchingService.bottom_text.match(/\$[\d.]+/);
-        if (feeMatch) serviceFee = feeMatch[0];
-      }
+    if (selectedTimeSlot && selectedTimeSlot.price) {
+      html += '<div class="checkout-total-row"><span>' + (activeServiceType === "pickup" ? "Pickup" : "Delivery") + ' fee</span><span>' + esc(selectedTimeSlot.price) + '</span></div>';
     }
-    if (serviceFee) {
-      html += '<div class="checkout-total-row"><span>Service fee</span><span>' + esc(serviceFee) + '</span></div>';
-    }
-
-    const feeNum = parsePrice(serviceFee);
-    const estTotal = subtotal + feeNum;
-    html += '<div class="checkout-total-row total-final"><span>Estimated Total</span><span>$' + estTotal.toFixed(2) + '</span></div>';
-    html += '<div class="checkout-total-row" style="color:#888;font-size:12px;"><span>(Estimated — real totals unavailable)</span></div>';
+    var feeNum = selectedTimeSlot ? parsePrice(selectedTimeSlot.price) : 0;
+    html += '<div class="checkout-total-row total-final"><span>Estimated Total</span><span>$' + (subtotal + feeNum).toFixed(2) + '</span></div>';
   }
   html += '</div></div>';
 
