@@ -608,6 +608,79 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
   return { results, cartItems };
 }
 
+// Add a single item to the Woodmans cart by search query (or product ID)
+async function addItemToCart(session, query, quantity, progressCallback) {
+  const progress = progressCallback || (() => {});
+  const shopId = session.shopId || SHOP_IDS.instore;
+  const postalCode = "53177";
+  const qty = quantity || 1;
+  const cartType = (session.mode === "pickup") ? "grocery" : "list";
+
+  // If query looks like an item ID (items_XXXXX-XXXXX), skip search
+  let itemId = null;
+  if (/^items_\d+-\d+$/.test(query)) {
+    itemId = query;
+  } else {
+    // Search for the item
+    progress("Searching: " + query);
+    const searchRes = await withRetry(() => gqlGet(session.cookies, "SearchResultsPlacements", {
+      filters: [], action: null, query: query,
+      pageViewId: "api-" + Date.now(),
+      retailerInventorySessionToken: "",
+      elevatedProductId: null, searchSource: "search",
+      disableReformulation: false, disableLlm: false, forceInspiration: false,
+      orderBy: "bestMatch", clusterId: null, includeDebugInfo: false,
+      clusteringStrategy: null,
+      contentManagementSearchParams: { itemGridColumnCount: 5 },
+      shopId, postalCode, zoneId: ZONE_ID, first: 4,
+    }, HASHES.SearchResultsPlacements));
+
+    if (isSessionExpired(searchRes)) { closeFastSession(); throw new Error("Session expired"); }
+
+    const rawStr = JSON.stringify(searchRes.body);
+    const ids = [...new Set((rawStr.match(/items_\d+-\d+/g) || []))];
+    if (ids.length === 0) {
+      return { ok: false, error: "No results found for: " + query };
+    }
+    itemId = ids[0];
+  }
+
+  // Get item details
+  const detailsRes = await withRetry(() => gqlGet(session.cookies, "Items", {
+    ids: [itemId], shopId, zoneId: ZONE_ID, postalCode,
+  }, HASHES.Items)).catch(() => null);
+  const details = (detailsRes && detailsRes.body?.data?.items) ? parseItemDetails(detailsRes.body.data.items) : {};
+  const detail = details[itemId] || {};
+
+  // Add to cart
+  progress("Adding: " + (detail.name || query));
+  const addRes = await withRetry(() => gqlPost(session.cookies, {
+    operationName: "UpdateCartItemsMutation",
+    variables: {
+      cartItemUpdates: [{ itemId, quantity: qty, quantityType: "each", trackingParams: {} }],
+      cartType, requestTimestamp: Date.now(), cartId: session.cartId,
+    },
+    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
+  }));
+
+  if (isSessionExpired(addRes)) { closeFastSession(); throw new Error("Session expired"); }
+  if (addRes.body?.errors) {
+    return { ok: false, error: addRes.body.errors[0]?.message || "Add failed" };
+  }
+
+  progress("Added: " + (detail.name || query));
+  return {
+    ok: true,
+    item: {
+      itemId,
+      name: detail.name || query,
+      price: detail.price || "",
+      size: detail.size || "",
+      quantity: qty,
+    },
+  };
+}
+
 // --- V3 REST helpers ---
 
 const V3_HEADERS_BASE = {
@@ -1024,6 +1097,7 @@ module.exports = {
   searchProducts,
   ensureShoppingMode,
   searchAndAddAll,
+  addItemToCart,
   fetchCart,
   removeAllCartItems,
   copyCart,

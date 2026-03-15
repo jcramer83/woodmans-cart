@@ -234,6 +234,24 @@ function startServer(deps) {
     }
   });
 
+  // Add a single item to the online cart by search query or product ID
+  app.post("/api/cart/add", async function (req, res) {
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
+    var query = req.body && req.body.query;
+    var quantity = (req.body && req.body.quantity) || 1;
+    if (!query) return res.json({ error: "query is required (product name or item ID)" });
+    var fastWorker = require("./cart-worker-fast");
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      var result = await fastWorker.addItemToCart(session, query, quantity, sendProgress);
+      return res.json(result);
+    } catch (err) {
+      return res.json({ error: err.message });
+    }
+  });
+
   // Remove all online cart items
   app.post("/api/cart/remove-all", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};

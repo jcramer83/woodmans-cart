@@ -19,11 +19,30 @@ Options: `"pickup"` or `"instore"`. Check current mode with `GET /api/shopping-m
 
 ### 2. Add Items to Cart
 
+**Add a single item by search query:**
+
+```
+POST /api/cart/add
+Body: { "shoppingMode": "pickup", "query": "organic whole milk", "quantity": 1 }
+```
+
+Response:
+```json
+{
+  "ok": true,
+  "item": { "itemId": "items_498198-12345", "name": "Organic Whole Milk", "price": "$5.49", "size": "1 gal", "quantity": 1 }
+}
+```
+
+Searches the Woodmans catalog for the best match and adds it to the online cart. You can also pass a product ID directly (e.g. `"query": "items_498198-12345"`). Returns the matched product details.
+
+**Add all staples and recipes at once:**
+
 ```
 POST /api/cart/start
 ```
 
-Adds all enabled staples and recipes to the Woodmans online cart. Items are defined in the app's staples/recipes lists. This is the cart automation step — it searches for each item and adds the best match.
+Adds all enabled staples and recipes to the Woodmans online cart. Items are defined in the app's staples/recipes lists.
 
 ### 3. Get Available Pickup/Delivery Time Slots
 
@@ -147,6 +166,15 @@ Returns matching products from the Woodmans catalog with name, price, size, bran
 
 ## Cart Operations
 
+### Add Item to Cart
+
+```
+POST /api/cart/add
+Body: { "shoppingMode": "pickup", "query": "bananas", "quantity": 2 }
+```
+
+Searches Woodmans and adds the best match. Works with product names, brands, or exact item IDs.
+
 ### View Current Online Cart
 
 ```
@@ -154,7 +182,7 @@ POST /api/cart/fetch
 Body: { "shoppingMode": "pickup" }
 ```
 
-Returns array of items currently in the Woodmans online cart.
+Returns array of items currently in the Woodmans online cart with name, price, size, quantity.
 
 ### Clear Online Cart
 
@@ -216,8 +244,13 @@ curl -X POST localhost:3456/api/shopping-mode \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup"}'
 
-# 2. Add all enabled items to cart
-curl -X POST localhost:3456/api/cart/start
+# 2. Add items to cart (individually or all at once)
+curl -X POST localhost:3456/api/cart/add \
+  -H "Content-Type: application/json" \
+  -d '{"shoppingMode":"pickup","query":"organic whole milk","quantity":1}'
+
+# Or add all staples/recipes at once:
+# curl -X POST localhost:3456/api/cart/start
 
 # 3. Get available pickup time slots
 curl -X POST localhost:3456/api/checkout/timeslots \
