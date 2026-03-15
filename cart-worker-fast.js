@@ -950,14 +950,22 @@ async function placeOrder(session, mode, slotId, progressCallback) {
   progress("Checking payment method...");
   const payRes = await withRetry(() => v3Get(session.cookies, "/v3/module_data/paymentmethodchooserv2"));
   const payData = payRes.body?.module_data;
-  const paymentInstructions = payData?.preselected_payment_instructions;
+  let paymentInstructions = payData?.preselected_payment_instructions;
+
+  // If no preselected instructions, build from available payment methods
   if (!paymentInstructions || paymentInstructions.length === 0) {
-    // Check if there are any payment methods at all
     const methods = payData?.payment_methods || [];
     if (methods.length === 0) {
       throw new Error("No payment method on file. Add a credit/debit card at shopwoodmans.com first.");
     }
-    throw new Error("No payment method selected. Configure payment at shopwoodmans.com first.");
+    // Use the default card, or fall back to the first one
+    const defaultMethod = methods.find(function (m) { return m.data?.attributes?.includes("default"); }) || methods[0];
+    if (defaultMethod && defaultMethod.data?.id) {
+      paymentInstructions = [{ payment_method_id: defaultMethod.data.id }];
+      progress("Using " + (defaultMethod.data.label || "card") + " for payment...");
+    } else {
+      throw new Error("No usable payment method found. Add a credit/debit card at shopwoodmans.com first.");
+    }
   }
 
   const serviceType = mode === "pickup" ? "pickup" : "delivery";
