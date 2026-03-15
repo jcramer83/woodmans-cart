@@ -1041,9 +1041,11 @@ async function selectDeliveryOption(session, optionId, progressCallback) {
 // The PUT to /v3/orders/new doesn't persist state for order creation —
 // all params must be sent directly in the POST body.
 
-async function placeOrder(session, mode, slotId, progressCallback) {
+async function placeOrder(session, mode, slotId, settings, progressCallback) {
   const progress = progressCallback || (() => {});
   if (!slotId) throw new Error("No time slot selected");
+  const phoneNumber = (settings && settings.phoneNumber) || "";
+  if (!phoneNumber) throw new Error("Phone number required. Add it in Settings.");
 
   // Fetch payment method
   progress("Checking payment method...");
@@ -1070,7 +1072,7 @@ async function placeOrder(session, mode, slotId, progressCallback) {
   const serviceType = mode === "pickup" ? "pickup" : "delivery";
   const body = {
     service_type: serviceType,
-    user_phone: session._userPhone || "",
+    user_phone: phoneNumber,
     payment_instructions: paymentInstructions,
   };
   body["deliveries[" + RETAILER_ID + "]"] = String(slotId);

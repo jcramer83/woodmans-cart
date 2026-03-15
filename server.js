@@ -662,7 +662,7 @@ function startServer(deps) {
       var session = await fastWorker.getFastSession(currentSettings, sendProgress);
       await fastWorker.ensureShoppingMode(session, mode, sendProgress);
       await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
-      var result = await fastWorker.placeOrder(session, mode, slotId, sendProgress);
+      var result = await fastWorker.placeOrder(session, mode, slotId, currentSettings, sendProgress);
       return res.json({ ok: true, result: result });
     } catch (err) {
       return res.json({ error: err.message });

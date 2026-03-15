@@ -47,6 +47,7 @@ function readJSON(filePath) {
       if (process.env.ZIP_CODE) data.zipCode = process.env.ZIP_CODE;
       if (process.env.STORE_URL) data.storeUrl = process.env.STORE_URL;
       if (process.env.SHOPPING_MODE) data.shoppingMode = process.env.SHOPPING_MODE;
+      if (process.env.PHONE_NUMBER) data.phoneNumber = process.env.PHONE_NUMBER;
     }
     return data;
   } catch {
