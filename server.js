@@ -658,22 +658,24 @@ function startServer(deps) {
     var slotId = req.body && req.body.slotId;
     if (!slotId) return res.json({ error: "No time slot selected" });
     var fastWorker = require("./cart-worker-fast");
-    var attempts = 0;
-    while (attempts < 2) {
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
+      var result = await fastWorker.placeOrder(session, mode, slotId, currentSettings, sendProgress);
+      return res.json({ ok: true, result: result });
+    } catch (err) {
+      // Retry once with fresh session on any failure
+      sendProgress("Order failed (" + err.message + "), retrying with fresh session...");
+      fastWorker.closeFastSession();
       try {
-        var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-        await fastWorker.ensureShoppingMode(session, mode, sendProgress);
-        await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
-        var result = await fastWorker.placeOrder(session, mode, slotId, currentSettings, sendProgress);
-        return res.json({ ok: true, result: result });
-      } catch (err) {
-        attempts++;
-        if (attempts < 2 && /session expired/i.test(err.message)) {
-          sendProgress("Session expired, retrying with fresh login...");
-          fastWorker.closeFastSession();
-          continue;
-        }
-        return res.json({ error: err.message });
+        var session2 = await fastWorker.getFastSession(currentSettings, sendProgress);
+        await fastWorker.ensureShoppingMode(session2, mode, sendProgress);
+        await fastWorker.ensureCheckoutServiceType(session2, mode, sendProgress);
+        var result2 = await fastWorker.placeOrder(session2, mode, slotId, currentSettings, sendProgress);
+        return res.json({ ok: true, result: result2 });
+      } catch (err2) {
+        return res.json({ error: err2.message });
       }
     }
   });
