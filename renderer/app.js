@@ -1470,9 +1470,25 @@ function renderOnlineCart(result) {
         <div class="item-detail">${item.size ? esc(item.size) : ""}${item.price ? " - " + esc(item.price) : ""}</div>
       </div>
       <span class="item-qty">x${item.quantity || 1}</span>
+      ${item.itemId ? `<button class="btn-icon btn-remove-online" onclick="removeOnlineCartItem('${esc(item.itemId)}')" title="Remove from cart">&times;</button>` : ""}
     </div>`
     )
     .join("");
+}
+
+async function removeOnlineCartItem(itemId) {
+  const mode = settings.shoppingMode || "instore";
+  try {
+    const result = await appApi.removeOnlineCartItem(itemId, mode);
+    if (result.error) {
+      showToast("Failed to remove: " + result.error, "error");
+    } else {
+      showToast("Item removed", "success");
+      importOnlineCart();
+    }
+  } catch (err) {
+    showToast("Failed to remove: " + err.message, "error");
+  }
 }
 
 async function fetchOnlineCart() {
@@ -2222,3 +2238,4 @@ window.fetchTimeSlots = fetchTimeSlots;
 window.selectTimeSlot = selectTimeSlot;
 window.openCheckoutPreview = openCheckoutPreview;
 window.placeOrder = placeOrder;
+window.removeOnlineCartItem = removeOnlineCartItem;

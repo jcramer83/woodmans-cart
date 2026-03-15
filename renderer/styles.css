@@ -55,6 +55,8 @@ body {
 
 .btn-icon:hover { background: rgba(255,255,255,0.15); }
 a.btn-icon { text-decoration: none; }
+.btn-remove-online { font-size: 16px; color: #e74c3c; padding: 2px 6px; margin-left: 4px; flex-shrink: 0; }
+.btn-remove-online:hover { background: rgba(231,76,60,0.15); }
 
 /* Server status bar */
 .server-bar {

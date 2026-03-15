@@ -97,7 +97,8 @@
     // Fetch current online cart
     fetchCurrentCart: function (mode) { return apiPost("/api/cart/fetch", { shoppingMode: mode }); },
 
-    // Remove all items from online cart
+    // Remove items from online cart
+    removeOnlineCartItem: function (itemId, mode) { return apiPost("/api/cart/remove", { itemId: itemId, shoppingMode: mode }); },
     removeAllCartItems: function (mode) { return apiPost("/api/cart/remove-all", { shoppingMode: mode }); },
 
     // Copy cart between shopping modes

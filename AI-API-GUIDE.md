@@ -182,9 +182,18 @@ POST /api/cart/fetch
 Body: { "shoppingMode": "pickup" }
 ```
 
-Returns array of items currently in the Woodmans online cart with name, price, size, quantity.
+Returns array of items currently in the Woodmans online cart. Each item includes `itemId`, `name`, `price`, `size`, `quantity`. Use `itemId` to remove individual items.
 
-### Clear Online Cart
+### Remove a Single Item from Cart
+
+```
+POST /api/cart/remove
+Body: { "shoppingMode": "pickup", "itemId": "items_498198-12345" }
+```
+
+Removes one item from the Woodmans online cart. The `itemId` comes from the `/api/cart/fetch` response.
+
+### Clear Entire Cart
 
 ```
 POST /api/cart/remove-all

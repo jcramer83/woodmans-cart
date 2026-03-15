@@ -766,6 +766,7 @@ async function fetchCartViaRest(session, progressCallback) {
     const v4Id = ci.v4_item_id || "";
     const detail = detailMap[v4Id] || {};
     return {
+      itemId: v4Id,
       name: detail.name || v4Id || ci.item_id || "Unknown",
       price: detail.price || "",
       size: detail.size || "",
@@ -862,6 +863,31 @@ async function removeAllCartItemsViaRest(session, progressCallback) {
 
 async function fetchCart(session, progressCallback) {
   return await fetchCartViaRest(session, progressCallback);
+}
+
+async function removeCartItem(session, itemId, progressCallback) {
+  const progress = progressCallback || (() => {});
+  if (!itemId) throw new Error("itemId is required");
+  const cartType = (session.mode === "pickup") ? "grocery" : "list";
+
+  progress("Removing item from cart...");
+  const res = await withRetry(() => gqlPost(session.cookies, {
+    operationName: "UpdateCartItemsMutation",
+    variables: {
+      cartItemUpdates: [{ itemId, quantity: 0, quantityType: "each", trackingParams: {} }],
+      cartType,
+      requestTimestamp: Date.now(),
+      cartId: session.cartId,
+    },
+    extensions: { persistedQuery: { version: 1, sha256Hash: HASHES.UpdateCartItemsMutation } },
+  }));
+
+  if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
+  if (res.body?.errors) {
+    throw new Error(res.body.errors[0]?.message || "Remove failed");
+  }
+  progress("Item removed from cart.");
+  return { ok: true };
 }
 
 async function removeAllCartItems(session, progressCallback) {
@@ -1099,6 +1125,7 @@ module.exports = {
   searchAndAddAll,
   addItemToCart,
   fetchCart,
+  removeCartItem,
   removeAllCartItems,
   copyCart,
   fetchServiceChooser,
