@@ -115,6 +115,7 @@
     fetchTimeSlots: function (mode) { return apiPost("/api/checkout/timeslots", { shoppingMode: mode }); },
     fetchServiceOptions: function () { return apiPost("/api/checkout/service-options"); },
     selectTimeSlot: function (optionId, mode) { return apiPost("/api/checkout/select-timeslot", { optionId: optionId, shoppingMode: mode }); },
+    placeOrder: function (mode) { return apiPost("/api/checkout/place-order", { shoppingMode: mode }); },
 
     // Open URL in new tab (web browser)
     openExternal: function (url) { window.open(url, "_blank"); return Promise.resolve(); },

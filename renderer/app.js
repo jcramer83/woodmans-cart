@@ -1894,6 +1894,44 @@ function renderCheckoutPreview(data, body) {
   body.innerHTML = html;
 }
 
+async function placeOrder() {
+  if (!selectedTimeSlot) {
+    showToast("Select a pickup/delivery time slot first", "error");
+    return;
+  }
+  if (!confirm("Place this order? Your payment method on file will be charged.")) return;
+
+  const btn = document.getElementById("btn-place-order");
+  btn.disabled = true;
+  btn.textContent = "Placing order...";
+  const body = document.getElementById("checkout-preview-body");
+
+  try {
+    const mode = settings.shoppingMode || "instore";
+    const result = await appApi.placeOrder(mode);
+    if (result.error) {
+      showToast("Order failed: " + result.error, "error");
+      btn.textContent = "Place Order";
+      btn.disabled = false;
+    } else {
+      btn.textContent = "Order Placed!";
+      btn.className = "btn";
+      btn.style.background = "#2e7d32";
+      btn.style.color = "#fff";
+      showToast("Order placed successfully!", "success");
+      // Refresh the online cart (it should be empty now)
+      if (typeof importOnlineCart === "function") importOnlineCart();
+    }
+  } catch (err) {
+    showToast("Order failed: " + err.message, "error");
+    btn.textContent = "Place Order";
+    btn.disabled = false;
+  } finally {
+    const statusLine = document.getElementById("cart-status-line");
+    if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
+  }
+}
+
 // --- Cart Automation ---
 
 async function startCartAutomation() {
@@ -2053,10 +2091,21 @@ function cleanLogMessage(msg) {
 function appendLog(message) {
   const cleaned = cleanLogMessage(message);
   if (!cleaned) return;
-  const statusLine = document.getElementById("cart-status-line");
-  if (statusLine) {
-    statusLine.textContent = cleaned;
-    statusLine.className = "cart-status-line active";
+  // Route cart-related messages to the online cart activity area,
+  // everything else to the main status line below checkout preview
+  var isCartMsg = /cart|adding|added|remov|item\(s\)|fetching details|found \d+ item/i.test(cleaned);
+  if (isCartMsg) {
+    var cartStatus = document.getElementById("online-cart-activity-status");
+    if (cartStatus) {
+      cartStatus.textContent = cleaned;
+      cartStatus.className = "activity-status active";
+    }
+  } else {
+    var statusLine = document.getElementById("cart-status-line");
+    if (statusLine) {
+      statusLine.textContent = cleaned;
+      statusLine.className = "cart-status-line active";
+    }
   }
 }
 
@@ -2172,3 +2221,4 @@ window.executeCopyCart = executeCopyCart;
 window.fetchTimeSlots = fetchTimeSlots;
 window.selectTimeSlot = selectTimeSlot;
 window.openCheckoutPreview = openCheckoutPreview;
+window.placeOrder = placeOrder;

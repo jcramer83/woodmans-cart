@@ -938,13 +938,24 @@ async function selectDeliveryOption(session, optionId, progressCallback) {
 }
 
 // --- Order placement ---
-// To place an order, POST to /v3/orders (from checkout create_order action).
-// This is intentionally NOT implemented as a function — documented here for reference only.
-// The checkout flow requires:
+// Places the order via POST /v3/orders. All checkout state (service type,
+// time slot, payment) is stored server-side on Instacart. Requires:
 //   1. ensureCheckoutServiceType() — switches checkout to pickup or delivery
 //   2. selectDeliveryOption() — reserves a time slot
 //   3. Payment method already configured on the Instacart/Woodmans account
-//   4. POST /v3/orders → creates the order (all state is server-side)
+
+async function placeOrder(session, progressCallback) {
+  const progress = progressCallback || (() => {});
+  progress("Placing order...");
+  const res = await withRetry(() => v3Post(session.cookies, "/v3/orders"));
+  if (isSessionExpired(res)) { closeFastSession(); throw new Error("Session expired"); }
+  if (res.status !== 200 && res.status !== 201) {
+    const errMsg = res.body?.error?.message || res.body?.errors?.[0]?.message || "Order failed (status " + res.status + ")";
+    throw new Error(errMsg);
+  }
+  progress("Order placed!");
+  return res.body;
+}
 
 async function fetchCheckoutPreview(session, mode, progressCallback) {
   const progress = progressCallback || (() => {});
@@ -983,5 +994,6 @@ module.exports = {
   fetchCheckoutTotals,
   ensureCheckoutServiceType,
   selectDeliveryOption,
+  placeOrder,
   sleep,
 };

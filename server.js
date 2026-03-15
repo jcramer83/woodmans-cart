@@ -616,6 +616,22 @@ function startServer(deps) {
     }
   });
 
+  // Place order (ACTUALLY charges and creates the order)
+  app.post("/api/checkout/place-order", async function (req, res) {
+    var currentSettings = readJSON(SETTINGS_PATH) || {};
+    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
+    var fastWorker = require("./cart-worker-fast");
+    try {
+      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
+      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
+      await fastWorker.ensureCheckoutServiceType(session, mode, sendProgress);
+      var result = await fastWorker.placeOrder(session, sendProgress);
+      return res.json({ ok: true, result: result });
+    } catch (err) {
+      return res.json({ error: err.message });
+    }
+  });
+
   // Fetch service chooser (delivery vs pickup options)
   app.post("/api/checkout/service-options", async function (req, res) {
     var currentSettings = readJSON(SETTINGS_PATH) || {};
