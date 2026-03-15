@@ -12,6 +12,7 @@ let removeProgressListener = null;
 let cartItemResults = {}; // { itemId: "ok"|"fail"|"skip" } — tracks per-item status during automation
 let selectedTimeSlot = null; // { day, slot } — currently selected pickup time slot
 let checkoutPreviewData = null; // cached checkout preview response
+let cartOperationActive = false; // true when a cart fetch/remove/add is running (for progress routing)
 
 // --- Modal helpers ---
 
@@ -1498,6 +1499,7 @@ async function fetchOnlineCart() {
 
   document.getElementById("online-cart-list").innerHTML = "";
   showActivity("online-cart-activity", "online-cart-activity-status", "Fetching your Woodmans cart... (30-60s)");
+  cartOperationActive = true;
 
   const statusLine = document.getElementById("cart-status-line");
   if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
@@ -1506,11 +1508,6 @@ async function fetchOnlineCart() {
   if (removeProgressListener) removeProgressListener();
   removeProgressListener = appApi.onCartProgress((message) => {
     appendLog(message);
-    // Update the activity status with the latest message
-    const statusEl = document.getElementById("online-cart-activity-status");
-    if (statusEl && statusEl.classList.contains("active")) {
-      statusEl.textContent = message;
-    }
   });
 
   try {
@@ -1526,6 +1523,7 @@ async function fetchOnlineCart() {
     renderOnlineCart({ error: err.message });
     hideActivity("online-cart-activity", "online-cart-activity-status", "Error: " + err.message, "error");
   } finally {
+    cartOperationActive = false;
     btn.disabled = false;
     btn.textContent = "Refresh";
   }
@@ -1540,33 +1538,28 @@ async function removeAllOnlineCartItems() {
   btn.textContent = "Removing...";
   refreshBtn.disabled = true;
   showActivity("online-cart-activity", "online-cart-activity-status", "Removing all items from Woodmans cart...");
+  cartOperationActive = true;
 
   const statusLine = document.getElementById("cart-status-line");
   if (statusLine) { statusLine.textContent = ""; statusLine.className = "cart-status-line"; }
 
-  // Set up progress listener for removal updates
   if (removeProgressListener) removeProgressListener();
   removeProgressListener = appApi.onCartProgress((message) => {
     appendLog(message);
-    const statusEl = document.getElementById("online-cart-activity-status");
-    if (statusEl && statusEl.classList.contains("active")) {
-      statusEl.textContent = message;
-    }
   });
 
   try {
     const result = await appApi.removeAllCartItems(settings.shoppingMode || "instore");
     if (result && result.error) {
-      appendLog("Error: " + result.error);
       hideActivity("online-cart-activity", "online-cart-activity-status", "Error: " + result.error, "error");
     } else {
       renderOnlineCart([]);
       hideActivity("online-cart-activity", "online-cart-activity-status", "All items removed", "success");
     }
   } catch (err) {
-    appendLog("Error: " + err.message);
     hideActivity("online-cart-activity", "online-cart-activity-status", "Error: " + err.message, "error");
   } finally {
+    cartOperationActive = false;
     btn.disabled = false;
     btn.textContent = "Remove All";
     refreshBtn.disabled = false;
@@ -1958,6 +1951,7 @@ async function startCartAutomation() {
   }
 
   cartRunning = true;
+  cartOperationActive = true;
   cartItemResults = {};
   document.getElementById("btn-start-cart").style.display = "none";
   document.getElementById("btn-stop-cart").style.display = "inline-flex";
@@ -2046,6 +2040,7 @@ async function startCartAutomation() {
     }
   } finally {
     cartRunning = false;
+    cartOperationActive = false;
     document.getElementById("btn-start-cart").style.display = "inline-flex";
     document.getElementById("btn-stop-cart").style.display = "none";
     renderCart();
@@ -2064,6 +2059,7 @@ async function stopCartAutomation() {
   appendLog("Stopping...");
   await appApi.stopCart();
   cartRunning = false;
+    cartOperationActive = false;
   document.getElementById("btn-start-cart").style.display = "inline-flex";
   document.getElementById("btn-stop-cart").style.display = "none";
   renderCart();
@@ -2107,10 +2103,9 @@ function cleanLogMessage(msg) {
 function appendLog(message) {
   const cleaned = cleanLogMessage(message);
   if (!cleaned) return;
-  // Route cart-related messages to the online cart activity area,
-  // everything else to the main status line below checkout preview
-  var isCartMsg = /cart|adding|added|remov|item\(s\)|fetching details|found \d+ item/i.test(cleaned);
-  if (isCartMsg) {
+  // Route to cart area only when a cart operation is actually in progress,
+  // otherwise show in the main status line below checkout preview
+  if (cartOperationActive) {
     var cartStatus = document.getElementById("online-cart-activity-status");
     if (cartStatus) {
       cartStatus.textContent = cleaned;
