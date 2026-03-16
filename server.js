@@ -98,6 +98,24 @@ function startServer(deps) {
     res.json({ ok: true, staple: newStaple });
   });
 
+  app.patch("/api/staples/:id", function (req, res) {
+    var staples = readJSON(STAPLES_PATH) || [];
+    var staple = staples.find(function (s) { return s.id === req.params.id; });
+    if (!staple) return res.json({ error: "Staple not found" });
+    if (req.body.quantity !== undefined) staple.quantity = req.body.quantity;
+    if (req.body.item !== undefined) staple.item = req.body.item;
+    if (req.body.note !== undefined) staple.note = req.body.note;
+    writeJSON(STAPLES_PATH, staples);
+    res.json({ ok: true, staple: staple });
+  });
+
+  app.delete("/api/staples/:id", function (req, res) {
+    var staples = readJSON(STAPLES_PATH) || [];
+    staples = staples.filter(function (s) { return s.id !== req.params.id; });
+    writeJSON(STAPLES_PATH, staples);
+    res.json({ ok: true });
+  });
+
   // Recipes
   app.get("/api/recipes", function (req, res) {
     res.json(readJSON(RECIPES_PATH) || []);

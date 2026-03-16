@@ -40,13 +40,22 @@ Body: { "item": "organic whole milk", "quantity": 1 }
 
 Adds an item to the manual items list in the shopping cart.
 
+### Update Cart Item Quantity
+
+```
+PATCH /api/cart/manual/:id
+Body: { "quantity": 3 }
+```
+
+Updates a manually added item. Use the ID portion after `manual-` from the cart response. Can also update `item` name.
+
 ### Remove Item from Cart
 
 ```
 DELETE /api/cart/manual/:id
 ```
 
-Removes a manually added item. Use the ID portion after `manual-` from the cart response. For example, if the cart item ID is `manual-m1abc23`, call `DELETE /api/cart/manual/m1abc23`.
+Removes a manually added item.
 
 ### Clear All Manual Items
 
@@ -81,6 +90,21 @@ Body: { "item": "Organic Bananas", "quantity": 1 }
 ```
 
 Adds a new weekly staple. Optional fields: `productName`, `brand`, `note`.
+
+### Update Staple Quantity
+
+```
+PATCH /api/staples/:id
+Body: { "quantity": 3 }
+```
+
+Updates a staple's quantity (or `item`, `note`). Use the `id` from `GET /api/staples`.
+
+### Remove a Staple
+
+```
+DELETE /api/staples/:id
+```
 
 ---
 
