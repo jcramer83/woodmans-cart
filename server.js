@@ -92,6 +92,31 @@ function startServer(deps) {
     res.json({ ok: true });
   });
 
+  // Get combined internal shopping cart (staples + enabled recipes + manual items)
+  app.get("/api/cart", function (req, res) {
+    var staplesData = readJSON(STAPLES_PATH) || [];
+    var recipesData = readJSON(RECIPES_PATH) || [];
+    var manualData = readJSON(MANUAL_ITEMS_PATH) || [];
+    var items = [];
+    for (var i = 0; i < staplesData.length; i++) {
+      var s = staplesData[i];
+      items.push({ id: "staple-" + s.id, item: s.item, quantity: s.quantity || 1, source: "staple" });
+    }
+    for (var j = 0; j < recipesData.length; j++) {
+      var r = recipesData[j];
+      if (!r.enabled) continue;
+      for (var k = 0; k < (r.items || []).length; k++) {
+        var ri = r.items[k];
+        items.push({ id: "recipe-" + r.id + "-" + (ri.item || ""), item: ri.item, quantity: ri.quantity || 1, source: r.name });
+      }
+    }
+    for (var m = 0; m < manualData.length; m++) {
+      var mi = manualData[m];
+      items.push({ id: "manual-" + mi.id, item: mi.item, quantity: mi.quantity || 1, source: "manual" });
+    }
+    res.json(items);
+  });
+
   // Manual cart items
   app.get("/api/cart/manual", function (req, res) {
     res.json(readJSON(MANUAL_ITEMS_PATH) || []);

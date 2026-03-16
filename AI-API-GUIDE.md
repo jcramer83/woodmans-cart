@@ -1,124 +1,50 @@
 # Woodmans Cart API Guide
 
-API for automating grocery ordering on ShopWoodmans.com. Base URL: `http://localhost:3456`
+API for managing a grocery shopping cart and ordering from Woodmans. Base URL: `http://localhost:3456`
 
 All POST endpoints accept JSON bodies (`Content-Type: application/json`).
 
 ---
 
-## Complete Order Flow
+## Shopping Cart
 
-### 1. Set Shopping Mode
+### View Cart
 
 ```
-POST /api/shopping-mode
-Body: { "shoppingMode": "pickup" }
+GET /api/cart
 ```
 
-Options: `"pickup"` or `"instore"`. Check current mode with `GET /api/shopping-mode`.
+Returns the combined shopping cart (staples + enabled recipes + manually added items):
+```json
+[
+  { "id": "staple-abc", "item": "Whole Milk", "quantity": 1, "source": "staple" },
+  { "id": "recipe-xyz-Ground Beef", "item": "Ground Beef", "quantity": 1, "source": "Tacos" },
+  { "id": "manual-m1abc", "item": "Bananas", "quantity": 2, "source": "manual" }
+]
+```
 
-### 2. Add Items to Cart
-
-**Add an item to the internal shopping cart:**
+### Add Item to Cart
 
 ```
 POST /api/cart/add
 Body: { "item": "organic whole milk", "quantity": 1 }
 ```
 
-Response:
-```json
-{
-  "ok": true,
-  "item": { "id": "m1abc23", "item": "organic whole milk", "quantity": 1 }
-}
-```
+Adds an item to the shopping cart. These items will be searched and added to the Woodmans online cart when "Add to Woodmans Cart" is triggered.
 
-Adds an item to the internal shopping cart (manual items list). These items will be searched and added to the Woodmans online cart when "Add to Woodmans Cart" is triggered.
-
-**Push all cart items to Woodmans:**
+### Remove Item from Cart
 
 ```
-POST /api/cart/start
+DELETE /api/cart/manual/:id
 ```
 
-Searches and adds all enabled staples, recipes, and manual items to the Woodmans online cart.
+Removes a manual item by its ID (the part after `manual-`). Staple and recipe items are managed through their own endpoints.
 
-### 3. Get Available Pickup/Delivery Time Slots
-
-```
-POST /api/checkout/timeslots
-Body: { "shoppingMode": "pickup" }
-```
-
-Response:
-```json
-{
-  "days": [
-    {
-      "day_full": "Sunday, March 15",
-      "date": "Mar 15",
-      "options": [
-        {
-          "id": "7525985868",
-          "window": "8am - 9am",
-          "price": "$4.95",
-          "attributes": ["available"],
-          "pickup_full_window": "Pickup tomorrow, 8am - 9am"
-        }
-      ]
-    }
-  ]
-}
-```
-
-Only options containing `"available"` in `attributes` can be selected. Use the `id` value when selecting a slot.
-
-If the cart is below the store's order minimum, returns a fallback with `_pickupFromServiceChooser: true` instead of selectable slots.
-
-### 4. Select a Time Slot
+### Clear Manual Items
 
 ```
-POST /api/checkout/select-timeslot
-Body: { "shoppingMode": "pickup", "optionId": "7525985868" }
+POST /api/cart/manual/clear
 ```
-
-Response: `{ "ok": true }` on success.
-
-### 5. Preview Checkout (Review Before Ordering)
-
-```
-POST /api/checkout/preview
-Body: { "shoppingMode": "pickup" }
-```
-
-Response:
-```json
-{
-  "cartItems": [
-    { "name": "Organic Bell Peppers", "price": "$5.69", "size": "1 each", "quantity": 1, "image": "https://..." }
-  ],
-  "serviceChooser": {
-    "service_types": [
-      { "service_type": "pickup", "type": "active", "label": "Pickup", "bottom_text": "From $4.95 • From 8am" },
-      { "service_type": "delivery", "type": "available", "label": "Delivery", "bottom_text": "From $9.95 • By 3pm" }
-    ]
-  },
-  "checkoutTotals": {
-    "line_items": [
-      { "label": "Subtotal", "value": "$90.31" },
-      { "label": "Est. tax", "value": "$0.66" }
-    ],
-    "total": { "label": "Total", "value": "$90.97" }
-  }
-}
-```
-
-**Note:** The pickup/delivery fee (e.g. $4.95) shown per-slot in the timeslots response is NOT included in `checkoutTotals`. Add it to the total to get the true grand total.
-
-### 6. Place Order
-
-Order placement is done through the app's UI: open Checkout Preview, review totals, then click Place Order. This is intentionally not exposed via API to prevent accidental charges.
 
 ---
 
@@ -142,7 +68,7 @@ POST /api/recipes              → Save full recipes array (replaces all)
 
 Each recipe: `{ "id": "...", "name": "Tacos", "enabled": true, "items": [{ "item": "Ground Beef", ... }] }`
 
-Only recipes with `"enabled": true` are included when adding to cart.
+Only recipes with `"enabled": true` are included in the shopping cart.
 
 ### Product Search
 
@@ -151,54 +77,6 @@ GET /api/products/search?q=organic+milk
 ```
 
 Returns matching products from the Woodmans catalog with name, price, size, brand, and image.
-
----
-
-## Cart Operations
-
-### Add Item to Internal Cart
-
-```
-POST /api/cart/add
-Body: { "item": "bananas", "quantity": 2 }
-```
-
-Adds an item to the internal shopping cart. Use `POST /api/cart/start` to push all items to Woodmans.
-
-### View Current Online Cart
-
-```
-POST /api/cart/fetch
-Body: { "shoppingMode": "pickup" }
-```
-
-Returns array of items currently in the Woodmans online cart. Each item includes `itemId`, `name`, `price`, `size`, `quantity`. Use `itemId` to remove individual items.
-
-### Remove a Single Item from Cart
-
-```
-POST /api/cart/remove
-Body: { "shoppingMode": "pickup", "itemId": "items_498198-12345" }
-```
-
-Removes one item from the Woodmans online cart. The `itemId` comes from the `/api/cart/fetch` response.
-
-### Clear Entire Cart
-
-```
-POST /api/cart/remove-all
-Body: { "shoppingMode": "pickup" }
-```
-
-Removes all items from the Woodmans online cart.
-
-### Stop Cart Automation
-
-```
-POST /api/cart/stop
-```
-
-Aborts a running cart automation (if `POST /api/cart/start` is in progress).
 
 ---
 
@@ -224,47 +102,111 @@ Returns recipe name ideas (no full recipes).
 
 ---
 
+## Checkout Flow
+
+These endpoints interact with the Woodmans/Instacart system. The app must be in pickup mode (configured in settings).
+
+### Push Cart to Woodmans
+
+```
+POST /api/cart/start
+```
+
+Searches and adds all shopping cart items (staples + enabled recipes + manual items) to the Woodmans online cart. This is the step that actually puts items in the Woodmans system.
+
+### Get Available Pickup Time Slots
+
+```
+POST /api/checkout/timeslots
+Body: { "shoppingMode": "pickup" }
+```
+
+Response:
+```json
+{
+  "days": [
+    {
+      "day_full": "Sunday, March 16",
+      "date": "Mar 16",
+      "options": [
+        {
+          "id": "7525985868",
+          "window": "8am - 9am",
+          "price": "$4.95",
+          "attributes": ["available"],
+          "pickup_full_window": "Pickup tomorrow, 8am - 9am"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Only options with `"available"` in `attributes` can be selected. Use the `id` value when selecting a slot. Requires items in the Woodmans cart (push cart first).
+
+### Select a Time Slot
+
+```
+POST /api/checkout/select-timeslot
+Body: { "shoppingMode": "pickup", "optionId": "7525985868" }
+```
+
+### Preview Checkout
+
+```
+POST /api/checkout/preview
+Body: { "shoppingMode": "pickup" }
+```
+
+Returns cart items with real Woodmans prices, totals (subtotal, tax), and service type info. The pickup fee (shown per-slot) is not included in totals — add it separately.
+
+### Place Order
+
+Order placement is done through the app UI (Checkout Preview → Place Order). Not exposed via API to prevent accidental charges.
+
+---
+
 ## Error Handling
 
 All endpoints return `{ "error": "message" }` on failure. Common errors:
 
-- `"Session expired"` — Login credentials may be invalid or session timed out
+- `"Session expired"` — Login session timed out, will auto-retry
 - `"No payment method on file..."` — Add a credit card at shopwoodmans.com
-- `"No time slot selected"` — Must provide a valid `slotId` to place order
-- `"A card is required for payment"` — Payment method not configured
 
 ---
 
-## Example: Full Order Automation
+## Example: Build a Cart
 
 ```bash
-# 1. Switch to pickup mode
-curl -X POST localhost:3456/api/shopping-mode \
-  -H "Content-Type: application/json" \
-  -d '{"shoppingMode":"pickup"}'
-
-# 2. Add items to internal cart
+# Add items to shopping cart
 curl -X POST localhost:3456/api/cart/add \
   -H "Content-Type: application/json" \
   -d '{"item":"organic whole milk","quantity":1}'
 
-# 3. Push all cart items to Woodmans
+curl -X POST localhost:3456/api/cart/add \
+  -H "Content-Type: application/json" \
+  -d '{"item":"bananas","quantity":6}'
+
+# View the cart
+curl localhost:3456/api/cart
+
+# Push to Woodmans (searches and adds each item)
 curl -X POST localhost:3456/api/cart/start
 
-# 4. Get available pickup time slots
+# Check available pickup times
 curl -X POST localhost:3456/api/checkout/timeslots \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup"}'
 
-# 5. Select a time slot (use an "id" from step 4)
+# Select a time slot
 curl -X POST localhost:3456/api/checkout/select-timeslot \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup","optionId":"7525985868"}'
 
-# 6. Preview the order
+# Preview totals
 curl -X POST localhost:3456/api/checkout/preview \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup"}'
 
-# Order placement is done through the app UI (Checkout Preview → Place Order)
+# Place order through the app UI
 ```
