@@ -46,6 +46,21 @@ function startServer(deps) {
     broadcast({ type: "online-update", items: items });
   }
 
+  // --- Helpers ---
+
+  // Quick product lookup: search Woodmans for the first match, return { name, price, image, size }
+  async function lookupProduct(query) {
+    try {
+      var currentSettings = readJSON(SETTINGS_PATH) || {};
+      var fastWorker = require("./cart-worker-fast");
+      var session = await fastWorker.getFastSession(currentSettings);
+      var results = await fastWorker.searchProducts(query, session);
+      return results && results[0] ? results[0] : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // --- REST API endpoints ---
 
   // Settings
@@ -77,7 +92,7 @@ function startServer(deps) {
     res.json(readJSON(STAPLES_PATH) || []);
   });
 
-  app.post("/api/staples", function (req, res) {
+  app.post("/api/staples", async function (req, res) {
     // If body is an array, replace all staples. If object, add a single staple.
     if (Array.isArray(req.body)) {
       writeJSON(STAPLES_PATH, req.body);
@@ -91,8 +106,19 @@ function startServer(deps) {
       note: req.body.note || "",
       productName: req.body.productName || "",
       brand: req.body.brand || "",
+      price: req.body.price || "",
+      image: req.body.image || "",
     };
     if (!newStaple.item) return res.json({ error: "item is required" });
+    // Auto-enrich with Woodmans product data if missing
+    if (!newStaple.image || !newStaple.price) {
+      var product = await lookupProduct(newStaple.item);
+      if (product) {
+        if (!newStaple.price && product.price) newStaple.price = product.price;
+        if (!newStaple.image && product.image) newStaple.image = product.image;
+        if (!newStaple.productName && product.name) newStaple.productName = product.name;
+      }
+    }
     staples.push(newStaple);
     writeJSON(STAPLES_PATH, staples);
     res.json({ ok: true, staple: newStaple });
@@ -339,18 +365,28 @@ function startServer(deps) {
   });
 
   // Add item to the internal shopping cart (manual items list)
-  app.post("/api/cart/add", function (req, res) {
-    var item = req.body && req.body.item;
+  // Auto-searches Woodmans for image and price if not provided
+  app.post("/api/cart/add", async function (req, res) {
+    var itemName = req.body && req.body.item;
     var quantity = (req.body && req.body.quantity) || 1;
-    if (!item) return res.json({ error: "item is required (product name)" });
+    if (!itemName) return res.json({ error: "item is required (product name)" });
     var items = readJSON(MANUAL_ITEMS_PATH) || [];
     var newItem = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-      item: item,
+      item: itemName,
       quantity: quantity,
       price: req.body.price || "",
       image: req.body.image || "",
     };
+    // Auto-enrich with Woodmans product data if missing image/price
+    if (!newItem.image || !newItem.price) {
+      var product = await lookupProduct(itemName);
+      if (product) {
+        if (!newItem.price && product.price) newItem.price = product.price;
+        if (!newItem.image && product.image) newItem.image = product.image;
+        if (product.name) newItem.item = product.name; // Use exact Woodmans name
+      }
+    }
     items.push(newItem);
     writeJSON(MANUAL_ITEMS_PATH, items);
     broadcast({ type: "manual-items-update", items: items });
