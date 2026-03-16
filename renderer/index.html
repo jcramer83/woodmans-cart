@@ -86,20 +86,9 @@
         <div id="manual-search-results" class="product-results" style="display:none;"></div>
       </section>
 
-      <!-- Pickup Time Slots (shown in pickup mode) -->
-      <section id="section-timeslots" class="section" style="display:none;">
-        <div class="section-header">
-          <h2><span id="timeslot-header-label">Pickup Time</span> <span id="timeslot-selected" class="timeslot-selected-label"></span></h2>
-          <button id="btn-refresh-timeslots" class="btn btn-sm" onclick="fetchTimeSlots()">Refresh</button>
-        </div>
-        <div id="timeslots-loading" class="activity-bar"><div class="activity-bar-fill"></div></div>
-        <div id="timeslots-container" class="timeslots-container"></div>
-      </section>
-
-      <!-- Action section -->
+      <!-- Add to Woodmans Cart -->
       <section class="section action-section">
         <div class="action-buttons">
-          <button id="btn-checkout-preview" class="btn btn-lg" onclick="openCheckoutPreview()">Checkout Preview</button>
           <button id="btn-start-cart" class="btn btn-lg btn-accent">Add to Woodmans Cart</button>
           <button id="btn-stop-cart" class="btn btn-lg btn-danger" style="display:none;">Stop</button>
         </div>
@@ -111,13 +100,12 @@
         </div>
         <div id="cart-activity" class="activity-bar"><div class="activity-bar-fill"></div></div>
         <div id="cart-activity-status" class="activity-status"></div>
-        <div id="cart-status-line" class="cart-status-line"></div>
       </section>
 
-      <!-- Current Woodmans Online Cart section -->
+      <!-- Current Woodmans Online Cart -->
       <section class="section">
         <div class="section-header">
-          <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button> Current Woodmans Cart <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
+          <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button> Woodmans Cart <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
           <div class="section-actions">
             <button class="btn-icon" onclick="openExternalUrl('https://shopwoodmans.com/store/woodmans-food-markets/storefront')" title="Open Woodmans Store">&#128722;</button>
             <button id="btn-copy-cart" class="btn btn-sm" title="Copy cart to other shopping mode">Copy Cart</button>
@@ -132,6 +120,24 @@
           <p class="empty-state">Click "Refresh" to load your current Woodmans online cart.</p>
         </div>
         </div>
+      </section>
+
+      <!-- Pickup Time Slots (shown in pickup mode) -->
+      <section id="section-timeslots" class="section" style="display:none;">
+        <div class="section-header">
+          <h2><span id="timeslot-header-label">Pickup Time</span> <span id="timeslot-selected" class="timeslot-selected-label"></span></h2>
+          <button id="btn-refresh-timeslots" class="btn btn-sm" onclick="fetchTimeSlots()">Refresh</button>
+        </div>
+        <div id="timeslots-loading" class="activity-bar"><div class="activity-bar-fill"></div></div>
+        <div id="timeslots-container" class="timeslots-container"></div>
+      </section>
+
+      <!-- Checkout -->
+      <section class="section">
+        <div class="action-buttons">
+          <button id="btn-checkout-preview" class="btn btn-lg" onclick="openCheckoutPreview()">Checkout Preview</button>
+        </div>
+        <div id="cart-status-line" class="cart-status-line"></div>
       </section>
     </div>
   </main>

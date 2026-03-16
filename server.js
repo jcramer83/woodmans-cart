@@ -234,22 +234,23 @@ function startServer(deps) {
     }
   });
 
-  // Add a single item to the online cart by search query or product ID
-  app.post("/api/cart/add", async function (req, res) {
-    var currentSettings = readJSON(SETTINGS_PATH) || {};
-    var mode = (req.body && req.body.shoppingMode) || currentSettings.shoppingMode || "instore";
-    var query = req.body && req.body.query;
+  // Add item to the internal shopping cart (manual items list)
+  app.post("/api/cart/add", function (req, res) {
+    var item = req.body && req.body.item;
     var quantity = (req.body && req.body.quantity) || 1;
-    if (!query) return res.json({ error: "query is required (product name or item ID)" });
-    var fastWorker = require("./cart-worker-fast");
-    try {
-      var session = await fastWorker.getFastSession(currentSettings, sendProgress);
-      await fastWorker.ensureShoppingMode(session, mode, sendProgress);
-      var result = await fastWorker.addItemToCart(session, query, quantity, sendProgress);
-      return res.json(result);
-    } catch (err) {
-      return res.json({ error: err.message });
-    }
+    if (!item) return res.json({ error: "item is required (product name)" });
+    var items = readJSON(MANUAL_ITEMS_PATH) || [];
+    var newItem = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      item: item,
+      quantity: quantity,
+      price: req.body.price || "",
+      image: req.body.image || "",
+    };
+    items.push(newItem);
+    writeJSON(MANUAL_ITEMS_PATH, items);
+    broadcast({ type: "manual-items-update", items: items });
+    res.json({ ok: true, item: newItem });
   });
 
   // Remove a single item from the online cart by itemId

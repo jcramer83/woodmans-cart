@@ -19,30 +19,30 @@ Options: `"pickup"` or `"instore"`. Check current mode with `GET /api/shopping-m
 
 ### 2. Add Items to Cart
 
-**Add a single item by search query:**
+**Add an item to the internal shopping cart:**
 
 ```
 POST /api/cart/add
-Body: { "shoppingMode": "pickup", "query": "organic whole milk", "quantity": 1 }
+Body: { "item": "organic whole milk", "quantity": 1 }
 ```
 
 Response:
 ```json
 {
   "ok": true,
-  "item": { "itemId": "items_498198-12345", "name": "Organic Whole Milk", "price": "$5.49", "size": "1 gal", "quantity": 1 }
+  "item": { "id": "m1abc23", "item": "organic whole milk", "quantity": 1 }
 }
 ```
 
-Searches the Woodmans catalog for the best match and adds it to the online cart. You can also pass a product ID directly (e.g. `"query": "items_498198-12345"`). Returns the matched product details.
+Adds an item to the internal shopping cart (manual items list). These items will be searched and added to the Woodmans online cart when "Add to Woodmans Cart" is triggered.
 
-**Add all staples and recipes at once:**
+**Push all cart items to Woodmans:**
 
 ```
 POST /api/cart/start
 ```
 
-Adds all enabled staples and recipes to the Woodmans online cart. Items are defined in the app's staples/recipes lists.
+Searches and adds all enabled staples, recipes, and manual items to the Woodmans online cart.
 
 ### 3. Get Available Pickup/Delivery Time Slots
 
@@ -118,17 +118,7 @@ Response:
 
 ### 6. Place Order
 
-```
-POST /api/checkout/place-order
-Body: { "shoppingMode": "pickup", "slotId": "7525985868" }
-```
-
-**This charges the credit card on file and places the order.** The `slotId` must be a valid `id` from the timeslots response.
-
-Success: `{ "ok": true, "result": { ... } }`
-Failure: `{ "error": "reason" }`
-
-Requires a credit/debit card saved at shopwoodmans.com. PayPal is not supported via the API.
+Order placement is done through the app's UI: open Checkout Preview, review totals, then click Place Order. This is intentionally not exposed via API to prevent accidental charges.
 
 ---
 
@@ -166,14 +156,14 @@ Returns matching products from the Woodmans catalog with name, price, size, bran
 
 ## Cart Operations
 
-### Add Item to Cart
+### Add Item to Internal Cart
 
 ```
 POST /api/cart/add
-Body: { "shoppingMode": "pickup", "query": "bananas", "quantity": 2 }
+Body: { "item": "bananas", "quantity": 2 }
 ```
 
-Searches Woodmans and adds the best match. Works with product names, brands, or exact item IDs.
+Adds an item to the internal shopping cart. Use `POST /api/cart/start` to push all items to Woodmans.
 
 ### View Current Online Cart
 
@@ -253,31 +243,28 @@ curl -X POST localhost:3456/api/shopping-mode \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup"}'
 
-# 2. Add items to cart (individually or all at once)
+# 2. Add items to internal cart
 curl -X POST localhost:3456/api/cart/add \
   -H "Content-Type: application/json" \
-  -d '{"shoppingMode":"pickup","query":"organic whole milk","quantity":1}'
+  -d '{"item":"organic whole milk","quantity":1}'
 
-# Or add all staples/recipes at once:
-# curl -X POST localhost:3456/api/cart/start
+# 3. Push all cart items to Woodmans
+curl -X POST localhost:3456/api/cart/start
 
-# 3. Get available pickup time slots
+# 4. Get available pickup time slots
 curl -X POST localhost:3456/api/checkout/timeslots \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup"}'
 
-# 4. Select a time slot (use an "id" from step 3)
+# 5. Select a time slot (use an "id" from step 4)
 curl -X POST localhost:3456/api/checkout/select-timeslot \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup","optionId":"7525985868"}'
 
-# 5. Preview the order
+# 6. Preview the order
 curl -X POST localhost:3456/api/checkout/preview \
   -H "Content-Type: application/json" \
   -d '{"shoppingMode":"pickup"}'
 
-# 6. Place the order (CHARGES THE CARD)
-curl -X POST localhost:3456/api/checkout/place-order \
-  -H "Content-Type: application/json" \
-  -d '{"shoppingMode":"pickup","slotId":"7525985868"}'
+# Order placement is done through the app UI (Checkout Preview → Place Order)
 ```
