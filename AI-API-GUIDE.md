@@ -1,6 +1,6 @@
 # Woodmans Cart API Guide
 
-API for managing a grocery shopping cart and ordering from Woodmans. Base URL: `http://localhost:3456`
+API for managing a grocery shopping cart for Woodmans Food Markets. Base URL: `http://localhost:3456`
 
 All POST endpoints accept JSON bodies (`Content-Type: application/json`).
 
@@ -8,20 +8,28 @@ All POST endpoints accept JSON bodies (`Content-Type: application/json`).
 
 ## Shopping Cart
 
+The shopping cart combines three sources: weekly staples, enabled recipe ingredients, and manually added items.
+
 ### View Cart
 
 ```
 GET /api/cart
 ```
 
-Returns the combined shopping cart (staples + enabled recipes + manually added items):
+Response:
 ```json
-[
-  { "id": "staple-abc", "item": "Whole Milk", "quantity": 1, "source": "staple" },
-  { "id": "recipe-xyz-Ground Beef", "item": "Ground Beef", "quantity": 1, "source": "Tacos" },
-  { "id": "manual-m1abc", "item": "Bananas", "quantity": 2, "source": "manual" }
-]
+{
+  "items": [
+    { "id": "staple-abc", "item": "A2 Milk Whole Milk 59 Oz", "quantity": 3, "price": "", "source": "staple" },
+    { "id": "recipe-xyz-Ground Beef", "item": "Ground Beef", "quantity": 1, "price": "", "source": "Tacos" },
+    { "id": "manual-m1abc", "item": "Bananas", "quantity": 2, "price": "", "source": "manual" }
+  ],
+  "itemCount": 3,
+  "estimatedTotal": "$0.00"
+}
 ```
+
+The `source` field indicates where the item comes from: `"staple"` for weekly staples, a recipe name for recipe ingredients, or `"manual"` for manually added items. The `estimatedTotal` is calculated from items that have price data (not all items have prices stored).
 
 ### Add Item to Cart
 
@@ -30,7 +38,7 @@ POST /api/cart/add
 Body: { "item": "organic whole milk", "quantity": 1 }
 ```
 
-Adds an item to the shopping cart. These items will be searched and added to the Woodmans online cart when "Add to Woodmans Cart" is triggered.
+Adds an item to the manual items list in the shopping cart.
 
 ### Remove Item from Cart
 
@@ -38,9 +46,9 @@ Adds an item to the shopping cart. These items will be searched and added to the
 DELETE /api/cart/manual/:id
 ```
 
-Removes a manual item by its ID (the part after `manual-`). Staple and recipe items are managed through their own endpoints.
+Removes a manually added item. Use the ID portion after `manual-` from the cart response. For example, if the cart item ID is `manual-m1abc23`, call `DELETE /api/cart/manual/m1abc23`.
 
-### Clear Manual Items
+### Clear All Manual Items
 
 ```
 POST /api/cart/manual/clear
@@ -48,35 +56,73 @@ POST /api/cart/manual/clear
 
 ---
 
-## Item Management
+## Weekly Staples
 
-### Staples (Weekly Recurring Items)
+Recurring items that are always in the shopping cart.
 
-```
-GET  /api/staples              → Array of staple items
-POST /api/staples              → Save full staples array (replaces all)
-```
-
-Each staple: `{ "id": "...", "item": "Whole Milk", "productName": "Woodmans Whole Milk", "brand": "Woodmans" }`
-
-### Recipes
+### View Staples
 
 ```
-GET  /api/recipes              → Array of recipes
-POST /api/recipes              → Save full recipes array (replaces all)
+GET /api/staples
 ```
 
-Each recipe: `{ "id": "...", "name": "Tacos", "enabled": true, "items": [{ "item": "Ground Beef", ... }] }`
+Returns the full staples list:
+```json
+[
+  { "id": "mle009s728zlz", "item": "A2 Milk Whole Milk 59 Oz", "quantity": 3, "productName": "A2 Milk Whole Milk 59 Oz", "brand": "" }
+]
+```
 
-Only recipes with `"enabled": true` are included in the shopping cart.
+### Add a Staple
 
-### Product Search
+```
+POST /api/staples
+Body: { "item": "Organic Bananas", "quantity": 1 }
+```
+
+Adds a new weekly staple. Optional fields: `productName`, `brand`, `note`.
+
+---
+
+## Recipes
+
+### View Active Recipes
+
+```
+GET /api/recipes/active
+```
+
+Returns only enabled recipes with their ingredients:
+```json
+[
+  {
+    "id": "abc123",
+    "name": "Tacos",
+    "items": [
+      { "item": "Ground Beef", "quantity": 1, "note": "1 lb" },
+      { "item": "Taco Shells", "quantity": 1 }
+    ]
+  }
+]
+```
+
+### View All Recipes
+
+```
+GET /api/recipes
+```
+
+Returns all recipes including disabled ones. Each recipe has an `enabled` boolean.
+
+---
+
+## Product Search
 
 ```
 GET /api/products/search?q=organic+milk
 ```
 
-Returns matching products from the Woodmans catalog with name, price, size, brand, and image.
+Search the Woodmans catalog. Returns matching products with name, price, size, brand, and image. Useful for finding exact product names to add as staples.
 
 ---
 
@@ -89,7 +135,7 @@ POST /api/recipe/generate
 Body: { "prompt": "healthy chicken stir fry", "dietaryFlags": { "glutenFree": true } }
 ```
 
-Uses Claude AI to generate a full recipe with ingredients optimized for Woodmans product search.
+Generates a full recipe with ingredients using Claude AI. Available dietary flags: `glutenFree`, `dairyFree`, `organic`, `pickyEater`.
 
 ### Get Recipe Suggestions
 
@@ -98,115 +144,35 @@ POST /api/recipe/suggest
 Body: { "prompt": "quick weeknight dinners", "count": 5 }
 ```
 
-Returns recipe name ideas (no full recipes).
-
----
-
-## Checkout Flow
-
-These endpoints interact with the Woodmans/Instacart system. The app must be in pickup mode (configured in settings).
-
-### Push Cart to Woodmans
-
-```
-POST /api/cart/start
-```
-
-Searches and adds all shopping cart items (staples + enabled recipes + manual items) to the Woodmans online cart. This is the step that actually puts items in the Woodmans system.
-
-### Get Available Pickup Time Slots
-
-```
-POST /api/checkout/timeslots
-Body: { "shoppingMode": "pickup" }
-```
-
-Response:
-```json
-{
-  "days": [
-    {
-      "day_full": "Sunday, March 16",
-      "date": "Mar 16",
-      "options": [
-        {
-          "id": "7525985868",
-          "window": "8am - 9am",
-          "price": "$4.95",
-          "attributes": ["available"],
-          "pickup_full_window": "Pickup tomorrow, 8am - 9am"
-        }
-      ]
-    }
-  ]
-}
-```
-
-Only options with `"available"` in `attributes` can be selected. Use the `id` value when selecting a slot. Requires items in the Woodmans cart (push cart first).
-
-### Select a Time Slot
-
-```
-POST /api/checkout/select-timeslot
-Body: { "shoppingMode": "pickup", "optionId": "7525985868" }
-```
-
-### Preview Checkout
-
-```
-POST /api/checkout/preview
-Body: { "shoppingMode": "pickup" }
-```
-
-Returns cart items with real Woodmans prices, totals (subtotal, tax), and service type info. The pickup fee (shown per-slot) is not included in totals — add it separately.
-
-### Place Order
-
-Order placement is done through the app UI (Checkout Preview → Place Order). Not exposed via API to prevent accidental charges.
+Returns recipe name ideas.
 
 ---
 
 ## Error Handling
 
-All endpoints return `{ "error": "message" }` on failure. Common errors:
-
-- `"Session expired"` — Login session timed out, will auto-retry
-- `"No payment method on file..."` — Add a credit card at shopwoodmans.com
+All endpoints return `{ "error": "message" }` on failure.
 
 ---
 
-## Example: Build a Cart
+## Example: Add Items to Cart
 
 ```bash
-# Add items to shopping cart
+# Add a manual item
 curl -X POST localhost:3456/api/cart/add \
   -H "Content-Type: application/json" \
   -d '{"item":"organic whole milk","quantity":1}'
 
-curl -X POST localhost:3456/api/cart/add \
+# Add a weekly staple
+curl -X POST localhost:3456/api/staples \
   -H "Content-Type: application/json" \
-  -d '{"item":"bananas","quantity":6}'
+  -d '{"item":"Organic Bananas","quantity":6}'
 
-# View the cart
+# View the full cart
 curl localhost:3456/api/cart
 
-# Push to Woodmans (searches and adds each item)
-curl -X POST localhost:3456/api/cart/start
+# View active recipes
+curl localhost:3456/api/recipes/active
 
-# Check available pickup times
-curl -X POST localhost:3456/api/checkout/timeslots \
-  -H "Content-Type: application/json" \
-  -d '{"shoppingMode":"pickup"}'
-
-# Select a time slot
-curl -X POST localhost:3456/api/checkout/select-timeslot \
-  -H "Content-Type: application/json" \
-  -d '{"shoppingMode":"pickup","optionId":"7525985868"}'
-
-# Preview totals
-curl -X POST localhost:3456/api/checkout/preview \
-  -H "Content-Type: application/json" \
-  -d '{"shoppingMode":"pickup"}'
-
-# Place order through the app UI
+# Search for a product
+curl "localhost:3456/api/products/search?q=organic+milk"
 ```

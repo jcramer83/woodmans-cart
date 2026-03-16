@@ -78,13 +78,37 @@ function startServer(deps) {
   });
 
   app.post("/api/staples", function (req, res) {
-    writeJSON(STAPLES_PATH, req.body);
-    res.json({ ok: true });
+    // If body is an array, replace all staples. If object, add a single staple.
+    if (Array.isArray(req.body)) {
+      writeJSON(STAPLES_PATH, req.body);
+      return res.json({ ok: true });
+    }
+    var staples = readJSON(STAPLES_PATH) || [];
+    var newStaple = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      item: req.body.item || "",
+      quantity: req.body.quantity || 1,
+      note: req.body.note || "",
+      productName: req.body.productName || "",
+      brand: req.body.brand || "",
+    };
+    if (!newStaple.item) return res.json({ error: "item is required" });
+    staples.push(newStaple);
+    writeJSON(STAPLES_PATH, staples);
+    res.json({ ok: true, staple: newStaple });
   });
 
   // Recipes
   app.get("/api/recipes", function (req, res) {
     res.json(readJSON(RECIPES_PATH) || []);
+  });
+
+  app.get("/api/recipes/active", function (req, res) {
+    var recipes = readJSON(RECIPES_PATH) || [];
+    var active = recipes.filter(function (r) { return r.enabled; }).map(function (r) {
+      return { id: r.id, name: r.name, items: r.items || [] };
+    });
+    res.json(active);
   });
 
   app.post("/api/recipes", function (req, res) {
@@ -98,23 +122,30 @@ function startServer(deps) {
     var recipesData = readJSON(RECIPES_PATH) || [];
     var manualData = readJSON(MANUAL_ITEMS_PATH) || [];
     var items = [];
+    var estimate = 0;
     for (var i = 0; i < staplesData.length; i++) {
       var s = staplesData[i];
-      items.push({ id: "staple-" + s.id, item: s.item, quantity: s.quantity || 1, source: "staple" });
+      var sp = parseFloat(String(s.price || "").replace("$", "")) || 0;
+      items.push({ id: "staple-" + s.id, item: s.item, quantity: s.quantity || 1, price: s.price || "", source: "staple" });
+      if (sp > 0) estimate += sp * (s.quantity || 1);
     }
     for (var j = 0; j < recipesData.length; j++) {
       var r = recipesData[j];
       if (!r.enabled) continue;
       for (var k = 0; k < (r.items || []).length; k++) {
         var ri = r.items[k];
-        items.push({ id: "recipe-" + r.id + "-" + (ri.item || ""), item: ri.item, quantity: ri.quantity || 1, source: r.name });
+        var rp = parseFloat(String(ri.price || "").replace("$", "")) || 0;
+        items.push({ id: "recipe-" + r.id + "-" + (ri.item || ""), item: ri.item, quantity: ri.quantity || 1, price: ri.price || "", source: r.name });
+        if (rp > 0) estimate += rp * (ri.quantity || 1);
       }
     }
     for (var m = 0; m < manualData.length; m++) {
       var mi = manualData[m];
-      items.push({ id: "manual-" + mi.id, item: mi.item, quantity: mi.quantity || 1, source: "manual" });
+      var mp = parseFloat(String(mi.price || "").replace("$", "")) || 0;
+      items.push({ id: "manual-" + mi.id, item: mi.item, quantity: mi.quantity || 1, price: mi.price || "", source: "manual" });
+      if (mp > 0) estimate += mp * (mi.quantity || 1);
     }
-    res.json(items);
+    res.json({ items: items, itemCount: items.length, estimatedTotal: "$" + estimate.toFixed(2) });
   });
 
   // Manual cart items
