@@ -27,18 +27,21 @@ Express + WebSocket server. Accepts a `deps` object with `readJSON`, `writeJSON`
 
 **REST endpoints:**
 - `GET/POST /api/settings` — User credentials and preferences
-- `GET/POST /api/staples` — Weekly staple items
+- `GET/POST /api/staples` — Weekly staple items (POST with object adds one, with array replaces all)
+- `PATCH/DELETE /api/staples/:id` — Update or remove a single staple
 - `GET/POST /api/recipes` — Recipe definitions
+- `GET /api/recipes/active` — Only enabled recipes with ingredients
+- `GET /api/cart` — Combined internal cart (staples + enabled recipes + manual items) with estimated total
+- `POST /api/cart/add` — Add item to internal cart (auto-enriches with Woodmans image/price)
+- `GET/POST/PATCH/DELETE /api/cart/manual` — Manual cart item CRUD
 - `GET/POST /api/shopping-mode` — Get/set shopping mode (pickup or instore)
 - `GET /api/products/search?q=` — Product search via GraphQL
-- `POST /api/cart/start` — Launch cart automation (adds all staples/recipes)
+- `POST /api/cart/start` — Launch cart automation (builds items from internal cart if no body)
 - `POST /api/cart/stop` — Abort running automation
-- `POST /api/cart/add` — Add a single item by search query or product ID
-- `POST /api/cart/fetch` — Get current online cart (returns items with `itemId`)
-- `POST /api/cart/remove` — Remove a single item by `itemId`
-- `POST /api/cart/remove-all` — Clear entire online cart
+- `POST /api/cart/fetch` — Get current Woodmans online cart (returns items with `itemId`)
+- `POST /api/cart/remove` — Remove a single item from Woodmans cart by `itemId`
+- `POST /api/cart/remove-all` — Clear entire Woodmans online cart
 - `POST /api/cart/copy` — Copy cart between shopping modes
-- `GET/POST/DELETE /api/cart/manual` — Manual cart item CRUD
 - `POST /api/checkout/preview` — Fetch cart + real totals from Woodmans
 - `POST /api/checkout/timeslots` — Fetch pickup/delivery time slots
 - `POST /api/checkout/select-timeslot` — Reserve a time slot on Woodmans
@@ -49,7 +52,7 @@ Express + WebSocket server. Accepts a `deps` object with `readJSON`, `writeJSON`
 - `POST /api/recipe/image` — Scrape Bing Images for recipe photo, cache to `data/recipe-images/`
 - `POST /api/recipe/image/delete` — Delete cached recipe image
 
-See `AI-API-GUIDE.md` for complete API documentation with request/response examples for external AI integration.
+See `AI-API-GUIDE.md` for the external AI integration API (subset of above focused on internal cart management).
 
 ### Renderer (`renderer/`)
 
@@ -77,7 +80,9 @@ The full checkout/order flow (`placeOrder()` in cart-worker-fast.js):
 1. `ensureCheckoutServiceType()` — switches checkout to pickup or delivery via PUT
 2. Time slot selected via `selectDeliveryOption()` — reserves slot via PUT to `/v3/orders/new`
 3. `placeOrder()` — POSTs to `/v3/orders` with **all params in the body** (service_type, deliveries, retailer_locations, payment_instructions, user_phone). The PUT to `/v3/orders/new` does NOT persist state for order creation — all params must be in the POST body.
-4. Payment method is fetched from `/v3/module_data/paymentmethodchooserv2` and `payment_instructions` are constructed from the default card on file. PayPal is not supported via API.
+4. Payment instructions use `payment_instrument_id` (not `payment_method_id`) fetched from the checkout container's `preselected_payment_instructions`, falling back to building from `payment_methods` list with correct key names.
+5. Phone number comes from `settings.phoneNumber` or `PHONE_NUMBER` env var.
+6. The place-order endpoint auto-retries once with a fresh session on any failure.
 
 ### V3 REST API (`v3Request`)
 
@@ -87,6 +92,10 @@ All V3 REST calls use a unified `v3Request()` helper that includes `X-Requested-
 - Pickup time slots: `GET /v3/retailers/1396/pickup_options?retailer_locations[1396]=498198` (NOT `delivery_options` which always returns delivery data)
 - Checkout totals: `GET /v3/module_data/checkouttotals?service_type=pickup` (the `service_type` param must match the mode — the checkout container's `async_data_path` hardcodes `service_type=delivery`)
 - Checkout totals are fetched sequentially after other calls (not in parallel) because Instacart needs time to recalculate after a service type switch
+
+### Auto-Enrichment
+
+When items are added via `POST /api/cart/add` or `POST /api/staples` (single item), the server automatically searches Woodmans for the product and populates image URL, price, and exact product name from the first match. This ensures items added via API have images in the UI.
 
 ### AI Integration
 
@@ -98,9 +107,10 @@ Dietary flags (gluten-free, dairy-free, organic, picky-eater) are injected into 
 
 ### Data Files (`data/`)
 
-- `settings.json` — credentials, store URL, delays, shopping mode. **Contains real credentials — never commit** (excluded via `.gitignore`).
-- `staples.json` — array of items with optional productName/brand
+- `settings.json` — credentials, store URL, delays, shopping mode, phone number. **Contains real credentials — never commit** (excluded via `.gitignore`).
+- `staples.json` — array of items with optional productName/brand/price/image
 - `recipes.json` — array of recipes with enabled flag and items sub-array
+- `manual-items.json` — manually added cart items
 - `recipe-images/` — cached recipe photos from Bing scraping (excluded via `.gitignore`)
 
 All use whole-array load/save pattern via `readJSON`/`writeJSON`.
@@ -117,6 +127,7 @@ Used in Docker deployments, overlaid onto settings by `server-standalone.js`:
 | `ZIP_CODE` | Store ZIP code |
 | `STORE_URL` | Store URL override |
 | `SHOPPING_MODE` | `instore` or `pickup` |
+| `PHONE_NUMBER` | Phone number for order placement |
 
 ## Docker / CI
 
@@ -128,7 +139,8 @@ Used in Docker deployments, overlaid onto settings by `server-standalone.js`:
 - **Cart removal** uses an `excludedCartIds` Set in the renderer — items are hidden from cart view without deleting source staples/recipes.
 - **Recipe item editing** uses a sub-modal (`modal-recipe-item`) with its own product search, mirroring the staple modal's search flow.
 - ShopWoodmans.com is an Instacart white-label React SPA — its GraphQL API uses persisted query hashes and requires specific cookie/header patterns.
-- **Progress message routing** — WebSocket progress messages are routed client-side: cart-related messages (matching keywords like "cart", "adding", "removing") go to the online cart activity area; all other messages go to the main status line below the checkout preview button.
+- **Progress message routing** — WebSocket progress messages are routed client-side using a `cartOperationActive` flag: messages go to the online cart activity area only during cart operations (fetch/remove/add); all other progress goes to the main status line below checkout preview.
+- **`POST /api/cart/start`** builds items from internal cart (staples + enabled recipes + manual items) when called with no body, so API callers don't need to provide items.
 
 ## POC Research Files
 
