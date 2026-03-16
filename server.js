@@ -182,9 +182,39 @@ function startServer(deps) {
   let cartWorkerInstance = null;
 
   app.post("/api/cart/start", async function (req, res) {
-    const { items, settings: clientSettings } = req.body;
+    var body = req.body || {};
+    var clientSettings = body.settings || {};
+    var items = body.items;
+
+    // If no items provided, build from internal cart (staples + enabled recipes + manual items)
+    if (!items || items.length === 0) {
+      var staplesData = readJSON(STAPLES_PATH) || [];
+      var recipesData = readJSON(RECIPES_PATH) || [];
+      var manualData = readJSON(MANUAL_ITEMS_PATH) || [];
+      items = [];
+      for (var si = 0; si < staplesData.length; si++) {
+        var s = staplesData[si];
+        items.push({ id: "staple-" + s.id, item: s.item, productName: s.productName || "", quantity: s.quantity || 1, note: s.note || "" });
+      }
+      for (var ri = 0; ri < recipesData.length; ri++) {
+        var r = recipesData[ri];
+        if (!r.enabled) continue;
+        for (var rj = 0; rj < (r.items || []).length; rj++) {
+          var rItem = r.items[rj];
+          items.push({ id: "recipe-" + r.id + "-" + (rItem.item || ""), item: rItem.item, productName: rItem.productName || "", quantity: rItem.quantity || 1, note: rItem.note || "" });
+        }
+      }
+      for (var mi = 0; mi < manualData.length; mi++) {
+        var m = manualData[mi];
+        items.push({ id: "manual-" + m.id, item: m.item, quantity: m.quantity || 1 });
+      }
+    }
+
+    if (items.length === 0) {
+      return res.json({ error: "No items in cart. Add staples, enable recipes, or add manual items first." });
+    }
+
     const serverSettings = readJSON(SETTINGS_PATH) || {};
-    // Use server-side credentials, but allow client to override non-sensitive fields
     const mergedSettings = Object.assign({}, serverSettings, {
       shoppingMode: clientSettings.shoppingMode || serverSettings.shoppingMode,
       delayBetweenItems: clientSettings.delayBetweenItems || serverSettings.delayBetweenItems,
