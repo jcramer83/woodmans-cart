@@ -42,7 +42,6 @@ function readJSON(filePath) {
     if (filePath === SETTINGS_PATH) {
       if (process.env.WOODMANS_USERNAME) data.username = process.env.WOODMANS_USERNAME;
       if (process.env.WOODMANS_PASSWORD) data.password = process.env.WOODMANS_PASSWORD;
-      if (process.env.ANTHROPIC_API_KEY) data.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
       if (process.env.ZIP_CODE) data.zipCode = process.env.ZIP_CODE;
       if (process.env.STORE_URL) data.storeUrl = process.env.STORE_URL;

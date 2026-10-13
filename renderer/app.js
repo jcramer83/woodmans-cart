@@ -200,20 +200,6 @@ function bindEvents() {
   document.getElementById("btn-add-recipe-item").addEventListener("click", addRecipeItemRow);
   document.getElementById("btn-save-recipe").addEventListener("click", saveRecipe);
 
-  // AI recipe
-  document.getElementById("btn-ai-recipe").addEventListener("click", openAiRecipeModal);
-  document.getElementById("btn-ai-generate").addEventListener("click", searchAiRecipeOptions);
-  document.getElementById("btn-ai-suggest").addEventListener("click", suggestRecipes);
-  document.getElementById("ai-recipe-prompt").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && e.target.value.trim() && !searchingOptions && !aiGenerating) {
-      e.preventDefault();
-      searchAiRecipeOptions();
-    }
-  });
-  document.getElementById("ai-recipe-prompt").addEventListener("input", (e) => {
-    document.getElementById("btn-ai-generate").disabled = !e.target.value.trim();
-  });
-
   // Recipe item modal - product search
   document.getElementById("btn-recipe-item-find").addEventListener("click", toggleRecipeItemSearch);
   document.getElementById("btn-recipe-item-search-go").addEventListener("click", doRecipeItemSearch);
@@ -564,7 +550,7 @@ async function selectStapleSearchResult(index) {
 function renderRecipes() {
   const list = document.getElementById("recipes-list");
   if (recipes.length === 0) {
-    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-recipes.png" alt="" />No recipes yet. Click "AI Recipe" to get started.</p>';
+    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-recipes.png" alt="" />No recipes yet. Click "+ Manual" to add one.</p>';
     return;
   }
 
@@ -920,266 +906,6 @@ function openRecipeExternal() {
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank");
-}
-
-// --- AI Recipe Generation ---
-
-function openAiRecipeModal() {
-  document.getElementById("ai-recipe-prompt").value = "";
-  document.getElementById("ai-recipe-servings").value = "4";
-  document.getElementById("ai-recipe-status").style.display = "none";
-  document.getElementById("ai-recipe-status").innerHTML = "";
-  document.getElementById("btn-ai-generate").disabled = true;
-  document.getElementById("ai-suggestions").style.display = "none";
-  document.getElementById("ai-suggestions-list").innerHTML = "";
-  showModal("modal-ai-recipe");
-  document.getElementById("ai-recipe-prompt").focus();
-}
-
-async function suggestRecipes() {
-  document.getElementById("ai-recipe-prompt").value = "";
-  document.getElementById("btn-ai-generate").disabled = true;
-
-  const suggestionsEl = document.getElementById("ai-suggestions");
-  const listEl = document.getElementById("ai-suggestions-list");
-  const btn = document.getElementById("btn-ai-suggest");
-
-  suggestionsEl.style.display = "block";
-  listEl.innerHTML = '<span class="ai-suggestions-loading">Getting ideas...</span>';
-  btn.disabled = true;
-
-  const glutenFree = document.getElementById("ai-gluten-free").checked;
-  const pickyEater = document.getElementById("ai-picky-eater").checked;
-  const dairyFree = document.getElementById("ai-dairy-free").checked;
-  const preferOrganic = document.getElementById("ai-prefer-organic").checked;
-
-  try {
-    const result = await appApi.suggestRecipes({ glutenFree, dairyFree, preferOrganic, pickyEater });
-
-    if (result.error) {
-      listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load suggestions.</span>';
-      btn.disabled = false;
-      return;
-    }
-
-    const suggestions = result.suggestions || [];
-    if (suggestions.length === 0) {
-      listEl.innerHTML = '<span class="ai-suggestions-loading">No suggestions returned.</span>';
-      btn.disabled = false;
-      return;
-    }
-
-    listEl.innerHTML = suggestions.map((s, i) =>
-      '<div class="ai-suggestion-chip" onclick="selectSuggestion(' + i + ')">' +
-        '<div class="chip-name">' + esc(s.name) + '</div>' +
-        '<div class="chip-desc">' + esc(s.description) + '</div>' +
-      '</div>'
-    ).join("");
-
-    window._aiSuggestions = suggestions;
-  } catch (err) {
-    listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load suggestions.</span>';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function selectSuggestion(index) {
-  const suggestions = window._aiSuggestions;
-  if (!suggestions || !suggestions[index]) return;
-  document.getElementById("ai-recipe-prompt").value = suggestions[index].name;
-  document.getElementById("btn-ai-generate").disabled = false;
-  // Highlight selected chip
-  document.querySelectorAll(".ai-suggestion-chip").forEach((chip, i) => {
-    chip.classList.toggle("selected", i === index);
-  });
-  document.getElementById("ai-recipe-prompt").focus();
-}
-
-let searchingOptions = false;
-
-async function searchAiRecipeOptions() {
-  if (aiGenerating || searchingOptions) return;
-  const prompt = document.getElementById("ai-recipe-prompt").value.trim();
-  if (!prompt) return;
-  searchingOptions = true;
-
-  const suggestionsEl = document.getElementById("ai-suggestions");
-  const listEl = document.getElementById("ai-suggestions-list");
-  const btn = document.getElementById("btn-ai-generate");
-
-  suggestionsEl.style.display = "block";
-  listEl.innerHTML = '<span class="ai-suggestions-loading">Finding recipe options...</span>';
-  btn.disabled = true;
-
-  const glutenFree = document.getElementById("ai-gluten-free").checked;
-  const pickyEater = document.getElementById("ai-picky-eater").checked;
-  const dairyFree = document.getElementById("ai-dairy-free").checked;
-  const preferOrganic = document.getElementById("ai-prefer-organic").checked;
-
-  try {
-    const result = await appApi.suggestRecipes({ prompt, glutenFree, dairyFree, preferOrganic, pickyEater });
-
-    if (result.error) {
-      listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load options.</span>';
-      return;
-    }
-
-    const suggestions = result.suggestions || [];
-    if (suggestions.length === 0) {
-      listEl.innerHTML = '<span class="ai-suggestions-loading">No options returned.</span>';
-      return;
-    }
-
-    listEl.innerHTML = suggestions.map((s, i) =>
-      '<div class="ai-suggestion-chip" onclick="generateFromOption(' + i + ')">' +
-        '<div class="chip-name">' + esc(s.name) + '</div>' +
-        '<div class="chip-desc">' + esc(s.description) + '</div>' +
-      '</div>'
-    ).join("");
-
-    window._aiRecipeOptions = suggestions;
-  } catch (err) {
-    listEl.innerHTML = '<span class="ai-suggestions-loading">Could not load options.</span>';
-  } finally {
-    searchingOptions = false;
-    btn.disabled = false;
-  }
-}
-
-function generateFromOption(index) {
-  if (aiGenerating) return;
-  const options = window._aiRecipeOptions;
-  if (!options || !options[index]) return;
-  // Immediately disable all chips to prevent any double-click/concurrent click
-  var suggestList = document.getElementById("ai-suggestions-list");
-  if (suggestList) suggestList.style.pointerEvents = "none";
-  document.getElementById("ai-recipe-prompt").value = options[index].name;
-  // Highlight selected
-  document.querySelectorAll("#ai-suggestions-list .ai-suggestion-chip").forEach((chip, i) => {
-    chip.classList.toggle("selected", i === index);
-  });
-  generateAiRecipe();
-}
-
-let aiGenerating = false;
-
-async function generateAiRecipe() {
-  if (aiGenerating) return;
-  const prompt = document.getElementById("ai-recipe-prompt").value.trim();
-  if (!prompt) return;
-  aiGenerating = true;
-
-  const servings = parseInt(document.getElementById("ai-recipe-servings").value) || 4;
-  const glutenFree = document.getElementById("ai-gluten-free").checked;
-  const pickyEater = document.getElementById("ai-picky-eater").checked;
-  const dairyFree = document.getElementById("ai-dairy-free").checked;
-  const preferOrganic = document.getElementById("ai-prefer-organic").checked;
-  const statusEl = document.getElementById("ai-recipe-status");
-  const btn = document.getElementById("btn-ai-generate");
-
-  statusEl.style.display = "block";
-  statusEl.innerHTML = '<div class="ai-loading-animation"><img class="ai-loading-img" src="/assets/cooking-loading.png" alt="" /><span>Cooking up your recipe...</span></div>';
-  statusEl.className = "ai-status loading";
-  btn.disabled = true;
-  // Disable suggestion chips during generation
-  const suggestList = document.getElementById("ai-suggestions-list");
-  if (suggestList) suggestList.style.pointerEvents = "none";
-  // Scroll status into view on mobile where it may be off-screen
-  statusEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
-
-  try {
-    const result = await appApi.generateRecipe({ prompt, servings, glutenFree, dairyFree, preferOrganic, pickyEater });
-
-    if (result.error) {
-      statusEl.textContent = "Error: " + result.error;
-      statusEl.className = "ai-status error";
-      btn.disabled = false;
-      return;
-    }
-
-    // Add the recipe
-    const recipe = {
-      id: generateId(),
-      name: result.name || prompt,
-      enabled: true,
-      servings: result.servings || servings,
-      instructions: result.instructions || [],
-      items: (result.items || []).map((item) => ({
-        item: item.item || "",
-        quantity: item.quantity || 1,
-        note: item.note || "",
-        productName: "",
-        price: "",
-      })),
-    };
-
-    recipes.push(recipe);
-    await appApi.saveRecipes(recipes);
-    renderRecipes();
-    renderCart();
-
-    statusEl.textContent = `Added "${recipe.name}" with ${recipe.items.length} ingredients!`;
-    statusEl.className = "ai-status success";
-
-    // Close AI modal and open the view recipe modal
-    hideModal("modal-ai-recipe");
-    viewRecipe(recipe.id);
-
-    // Look up product matches for each ingredient, then generate recipe image
-    matchRecipeProducts(recipe).then(async () => {
-      await appApi.saveRecipes(recipes);
-      renderRecipes();
-      renderCart();
-      // Update view modal if still open
-      if (isModalOpen("modal-view-recipe") && viewingRecipeId === recipe.id) {
-        viewRecipe(recipe.id);
-      }
-      // Generate recipe image after product matching is done (avoids save race)
-      const imgResult = await appApi.generateRecipeImage(recipe.id, recipe.name);
-      if (imgResult && imgResult.imageUrl && !imgResult.error) {
-        recipe.imageUrl = imgResult.imageUrl;
-        await appApi.saveRecipes(recipes);
-        renderRecipes();
-        var imgEl = document.getElementById("view-recipe-image");
-        if (imgEl && isModalOpen("modal-view-recipe")) {
-          imgEl.src = imgResult.imageUrl + "?t=" + Date.now();
-          imgEl.alt = recipe.name;
-          imgEl.style.display = "block";
-        }
-      }
-    });
-  } catch (err) {
-    statusEl.textContent = "Error: " + err.message;
-    statusEl.className = "ai-status error";
-  } finally {
-    aiGenerating = false;
-    // Only re-enable controls if the modal is still open (error case).
-    // On success the modal is closed, so leave chips disabled to prevent stale clicks.
-    if (isModalOpen("modal-ai-recipe")) {
-      btn.disabled = false;
-      const suggestList = document.getElementById("ai-suggestions-list");
-      if (suggestList) suggestList.style.pointerEvents = "";
-    }
-  }
-}
-
-async function matchRecipeProducts(recipe) {
-  for (let i = 0; i < recipe.items.length; i++) {
-    const item = recipe.items[i];
-    if (item.image) continue;
-    try {
-      const results = await appApi.searchProducts(item.item);
-      if (Array.isArray(results) && results.length > 0) {
-        const p = results[0];
-        item.productName = p.name || item.productName;
-        item.price = p.price || item.price;
-        item.image = p.image || "";
-      }
-    } catch (err) {
-      console.warn("matchRecipeProducts failed for:", item.item, err);
-    }
-  }
 }
 
 // --- Combined Cart ---
@@ -1580,7 +1306,7 @@ function openCopyCartModal() {
   const statusEl = document.getElementById("copy-cart-status");
   statusEl.style.display = "none";
   statusEl.textContent = "";
-  statusEl.className = "ai-status";
+  statusEl.className = "status-msg";
   document.getElementById("btn-copy-cart-confirm").disabled = false;
   showModal("modal-copy-cart");
 }
@@ -1596,7 +1322,7 @@ async function executeCopyCart() {
 
   statusEl.style.display = "block";
   statusEl.textContent = "Starting...";
-  statusEl.className = "ai-status loading";
+  statusEl.className = "status-msg loading";
   confirmBtn.disabled = true;
 
   // Listen for progress messages
@@ -1609,10 +1335,10 @@ async function executeCopyCart() {
     const result = await appApi.copyCart({ fromMode, toMode, clearSource });
     if (result && result.error) {
       statusEl.textContent = "Error: " + result.error;
-      statusEl.className = "ai-status error";
+      statusEl.className = "status-msg error";
     } else {
       statusEl.textContent = "Copied " + (result.copied || 0) + " item(s)" + (result.cleared ? " and cleared source cart" : "") + "!";
-      statusEl.className = "ai-status success";
+      statusEl.className = "status-msg success";
       // Update settings to reflect destination mode
       settings.shoppingMode = toMode;
       await appApi.saveSettings(settings);
@@ -1623,7 +1349,7 @@ async function executeCopyCart() {
     }
   } catch (err) {
     statusEl.textContent = "Error: " + err.message;
-    statusEl.className = "ai-status error";
+    statusEl.className = "status-msg error";
   } finally {
     confirmBtn.disabled = false;
   }
@@ -2225,8 +1951,6 @@ window.changeCartQty = changeCartQty;
 window.openRecipeItemModal = openRecipeItemModal;
 window.selectRecipeItemProduct = selectRecipeItemProduct;
 window.selectManualProduct = selectManualProduct;
-window.selectSuggestion = selectSuggestion;
-window.generateFromOption = generateFromOption;
 window.viewRecipe = viewRecipe;
 window.printRecipe = printRecipe;
 window.openRecipeExternal = openRecipeExternal;

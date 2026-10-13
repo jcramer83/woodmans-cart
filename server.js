@@ -69,20 +69,18 @@ function startServer(deps) {
     // Omit sensitive fields for web clients
     const safe = Object.assign({}, settings);
     delete safe.password;
-    delete safe.anthropicApiKey;
     res.json(safe);
   });
 
   app.post("/api/settings", function (req, res) {
     const current = readJSON(SETTINGS_PATH) || {};
     const incoming = req.body;
-    // Merge: keep existing password/apiKey if not provided
+    // Merge: keep existing password if not provided
     if (!incoming.password && current.password) {
       incoming.password = current.password;
     }
-    if (!incoming.anthropicApiKey && current.anthropicApiKey) {
-      incoming.anthropicApiKey = current.anthropicApiKey;
-    }
+    // Drop legacy AI key if present
+    delete incoming.anthropicApiKey;
     writeJSON(SETTINGS_PATH, incoming);
     res.json({ ok: true });
   });
@@ -443,178 +441,6 @@ function startServer(deps) {
     } catch (err) {
       sendProgress("Error: " + err.message);
       return res.json({ error: err.message });
-    }
-  });
-
-  // AI recipe generation
-  app.post("/api/recipe/generate", async function (req, res) {
-    const { prompt, servings, glutenFree, dairyFree, preferOrganic, pickyEater } = req.body;
-    const currentSettings = readJSON(SETTINGS_PATH) || {};
-    const apiKey = currentSettings.anthropicApiKey;
-
-    if (!apiKey) {
-      return res.json({ error: "No Claude API key configured. Add it in Settings." });
-    }
-
-    const httpsModule = require("https");
-
-    var dietaryRules = "";
-    if (glutenFree) {
-      dietaryRules += '\n- GLUTEN FREE REQUIRED: Every ingredient must be gluten free. For items that commonly contain gluten (pasta, flour, bread, soy sauce, breadcrumbs, etc.), ALWAYS include "gluten free" in the search term (e.g. "gluten free pasta", "gluten free soy sauce", "gluten free flour"). Only use naturally gluten-free ingredients or certified gluten-free products.';
-    }
-    if (dairyFree) {
-      dietaryRules += '\n- DAIRY FREE REQUIRED: No milk, butter, cheese, cream, yogurt, or any dairy products. Use dairy-free alternatives and include "dairy free" in search terms (e.g. "dairy free butter", "dairy free shredded cheese", "oat milk", "coconut cream").';
-    }
-    if (preferOrganic) {
-      dietaryRules += '\n- PREFER ORGANIC: Include "organic" in search terms when possible (e.g. "organic chicken breast", "organic baby spinach", "organic diced tomatoes"). This helps the store search show organic options first.';
-    }
-    if (pickyEater) {
-      dietaryRules += '\n- PICKY EATER FRIENDLY: Stick to familiar, crowd-pleasing ingredients. Avoid unusual spices, exotic vegetables, strong flavors (anchovies, blue cheese, liver, etc.), overly spicy food, or adventurous textures. Keep it simple and approachable — the kind of food even a selective eater would enjoy.';
-    }
-
-    const systemPrompt = 'You are a recipe assistant for a grocery shopping app. Generate a recipe with a list of ingredients that can be found at a grocery store called Woodman\'s. The "item" field is used as a SEARCH QUERY on the store\'s website to find and add products to a cart.\n\nReturn ONLY valid JSON in this exact format, no other text:\n{\n  "name": "Recipe Name",\n  "servings": 4,\n  "instructions": ["Step 1...", "Step 2..."],\n  "items": [\n    {"item": "search term for store website", "quantity": 1, "note": "size or detail"}\n  ]\n}\n\nRules:\n- "servings" is the number of servings the recipe makes\n- "instructions" is an array of step-by-step cooking instructions. Be concise but complete.\n- "item" is a SEARCH QUERY typed into the store\'s search bar. Use names a shopper would type to find the exact product, e.g. "boneless skinless chicken thighs" not "chicken" or "2 lbs chicken thighs"\n- Do NOT put amounts, measurements, or cooking units in the "item" field (no "2 cups flour", no "1 lb ground beef"). Put only the product name.\n- "quantity" is how many times to ADD this item to the cart. Each add gives you one store unit (1 can, 1 bag, 1 bunch, 1 individual fruit/vegetable, etc.). If the recipe needs 2 tomatoes, quantity is 2. If it needs 2 cans of diced tomatoes, quantity is 2. If it needs 2 cups of flour, quantity is still 1 because one bag of flour is enough. Think about what the shopper actually needs to put in their cart.\n- Use the "note" field for the recipe amount, size preference, or preparation details (e.g. "need 2 cups", "1 lb", "diced")\n- Be specific with product names (e.g. "sharp cheddar cheese block" not just "cheese")\n- Skip pantry staples most people already have (salt, black pepper, olive oil, water) unless the recipe uses an unusual amount' + dietaryRules;
-
-    const userMessage = "Generate a recipe for: " + prompt + "\nServings: " + servings;
-
-    const body = JSON.stringify({
-      model: "claude-opus-4-6",
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    });
-
-    try {
-      const result = await new Promise(function (resolve, reject) {
-        const reqObj = httpsModule.request(
-          {
-            hostname: "api.anthropic.com",
-            path: "/v1/messages",
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": apiKey,
-              "anthropic-version": "2023-06-01",
-            },
-          },
-          function (apiRes) {
-            let data = "";
-            apiRes.on("data", function (chunk) { data += chunk; });
-            apiRes.on("end", function () {
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.error) {
-                  reject(new Error(parsed.error.message || "API error"));
-                  return;
-                }
-                const text = (parsed.content && parsed.content[0] && parsed.content[0].text) || "";
-                resolve(text);
-              } catch (e) {
-                reject(new Error("Failed to parse API response"));
-              }
-            });
-          }
-        );
-        reqObj.on("error", reject);
-        reqObj.write(body);
-        reqObj.end();
-      });
-
-      const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return res.json({ error: "Could not parse recipe from AI response." });
-      }
-
-      const recipe = JSON.parse(jsonMatch[0]);
-      res.json(recipe);
-    } catch (err) {
-      res.json({ error: err.message });
-    }
-  });
-
-  // AI recipe suggestions
-  app.post("/api/recipe/suggest", async function (req, res) {
-    const { prompt, glutenFree, dairyFree, preferOrganic, pickyEater } = req.body;
-    const currentSettings = readJSON(SETTINGS_PATH) || {};
-    const apiKey = currentSettings.anthropicApiKey;
-
-    if (!apiKey) {
-      return res.json({ error: "No Claude API key configured. Add it in Settings." });
-    }
-
-    const httpsModule = require("https");
-
-    var dietaryNote = "";
-    var flags = [];
-    if (glutenFree) flags.push("gluten-free");
-    if (dairyFree) flags.push("dairy-free");
-    if (preferOrganic) flags.push("organic-preferred");
-    if (pickyEater) flags.push("picky-eater-friendly (simple, familiar, crowd-pleasing ingredients only)");
-    if (flags.length > 0) {
-      dietaryNote = "\nDietary requirements: " + flags.join(", ") + ". All suggestions must respect these constraints.";
-    }
-
-    var userContent;
-    if (prompt) {
-      userContent = 'The user wants to make: "' + prompt + '". Suggest 4 specific recipe variations based on this. For example, if they said "pizza", suggest things like "Classic Pepperoni Pizza", "BBQ Chicken Flatbread", "Margherita Pizza", "Supreme Meat Lovers Pizza". Return a JSON array of objects with "name" (specific recipe title, 2-5 words) and "description" (one short enticing sentence, max 12 words).' + dietaryNote;
-    } else {
-      userContent = "Suggest 6 diverse dinner recipe ideas. Mix cuisines and styles (e.g. comfort food, healthy, quick weeknight, slow-cooked, international). Return a JSON array of objects with \"name\" (recipe title, 2-5 words) and \"description\" (one short enticing sentence, max 12 words)." + dietaryNote;
-    }
-
-    const body = JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1024,
-      system: "You suggest dinner recipe ideas. Return ONLY valid JSON, no other text.",
-      messages: [{
-        role: "user",
-        content: userContent
-      }],
-    });
-
-    try {
-      const result = await new Promise(function (resolve, reject) {
-        const reqObj = httpsModule.request(
-          {
-            hostname: "api.anthropic.com",
-            path: "/v1/messages",
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": apiKey,
-              "anthropic-version": "2023-06-01",
-            },
-          },
-          function (apiRes) {
-            let data = "";
-            apiRes.on("data", function (chunk) { data += chunk; });
-            apiRes.on("end", function () {
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.error) {
-                  reject(new Error(parsed.error.message || "API error"));
-                  return;
-                }
-                const text = (parsed.content && parsed.content[0] && parsed.content[0].text) || "";
-                resolve(text);
-              } catch (e) {
-                reject(new Error("Failed to parse API response"));
-              }
-            });
-          }
-        );
-        reqObj.on("error", reject);
-        reqObj.write(body);
-        reqObj.end();
-      });
-
-      const jsonMatch = result.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        return res.json({ error: "Could not parse suggestions from AI response." });
-      }
-
-      const suggestions = JSON.parse(jsonMatch[0]);
-      res.json({ suggestions: suggestions });
-    } catch (err) {
-      res.json({ error: err.message });
     }
   });
 

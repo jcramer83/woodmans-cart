@@ -109,9 +109,6 @@
     <rect x="200" y="0" width="78" height="28" rx="14" fill="#2496ed" opacity="0.25" stroke="#2496ed" stroke-width="1"/>
     <text x="239" y="18" font-family="'Segoe UI', monospace" font-size="12" fill="#6cb5f5" text-anchor="middle">Docker</text>
 
-    <!-- Claude AI badge -->
-    <rect x="288" y="0" width="92" height="28" rx="14" fill="#d97706" opacity="0.25" stroke="#d97706" stroke-width="1"/>
-    <text x="334" y="18" font-family="'Segoe UI', monospace" font-size="12" fill="#fbbf24" text-anchor="middle">Claude AI</text>
   </g>
 
   <!-- Decorative speed lines -->

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Woodmans Cart is a web app that automates adding grocery items to a ShopWoodmans.com cart, previewing checkout, and placing orders. It has a GUI for managing weekly staple items, recipes with ingredients, AI recipe generation (Claude API), and one-click cart automation. Runs as a standalone Express web server (designed for Docker/Unraid deployment).
+Woodmans Cart is a web app that automates adding grocery items to a ShopWoodmans.com cart, previewing checkout, and placing orders. It has a GUI for managing weekly staple items, recipes with ingredients, and one-click cart automation. Runs as a standalone Express web server (designed for Docker/Unraid deployment).
 
 ## Commands
 
@@ -47,8 +47,6 @@ Express + WebSocket server. Accepts a `deps` object with `readJSON`, `writeJSON`
 - `POST /api/checkout/select-timeslot` — Reserve a time slot on Woodmans
 - `POST /api/checkout/place-order` — Place order (charges card on file)
 - `POST /api/checkout/service-options` — Fetch service chooser (pickup vs delivery)
-- `POST /api/recipe/generate` — AI recipe generation (Claude Opus 4.6)
-- `POST /api/recipe/suggest` — AI recipe suggestions (Claude Sonnet 4.5)
 - `POST /api/recipe/image` — Scrape Bing Images for recipe photo, cache to `data/recipe-images/`
 - `POST /api/recipe/image/delete` — Delete cached recipe image
 
@@ -97,14 +95,6 @@ All V3 REST calls use a unified `v3Request()` helper that includes `X-Requested-
 
 When items are added via `POST /api/cart/add` or `POST /api/staples` (single item), the server automatically searches Woodmans for the product and populates image URL, price, and exact product name from the first match. This ensures items added via API have images in the UI.
 
-### AI Integration
-
-Uses raw HTTPS requests to `api.anthropic.com` (no SDK). Two models:
-- **Recipe generation** (`/api/recipe/generate`): Claude Opus 4.6 — full recipe with ingredients, instructions, and search-optimized item names
-- **Recipe suggestions** (`/api/recipe/suggest`): Claude Sonnet 4.5 — quick recipe idea brainstorming
-
-Dietary flags (gluten-free, dairy-free, organic, picky-eater) are injected into prompts.
-
 ### Data Files (`data/`)
 
 - `settings.json` — credentials, store URL, delays, shopping mode, phone number. **Contains real credentials — never commit** (excluded via `.gitignore`).
@@ -123,7 +113,6 @@ Used in Docker deployments, overlaid onto settings by `server-standalone.js`:
 |----------|-------------|
 | `WOODMANS_USERNAME` | Woodmans-Food.com login email |
 | `WOODMANS_PASSWORD` | Woodmans-Food.com password |
-| `ANTHROPIC_API_KEY` | Claude API key for AI recipes |
 | `ZIP_CODE` | Store ZIP code |
 | `STORE_URL` | Store URL override |
 | `SHOPPING_MODE` | `instore` or `pickup` |

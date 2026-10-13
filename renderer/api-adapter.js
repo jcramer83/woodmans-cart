@@ -86,12 +86,7 @@
     // Product search
     searchProducts: function (query) { return apiGet("/api/products/search?q=" + encodeURIComponent(query)); },
 
-    // AI recipe generation
-    generateRecipe: function (data) { return apiPost("/api/recipe/generate", data); },
-    suggestRecipes: function (data) { return apiPost("/api/recipe/suggest", data); },
-
     // Recipe image generation
-    generateRecipeImage: function (id, name) { return apiPost("/api/recipe/image", { recipeId: id, recipeName: name }); },
     deleteRecipeImage: function (id) { return apiPost("/api/recipe/image/delete", { recipeId: id }); },
 
     // Fetch current online cart

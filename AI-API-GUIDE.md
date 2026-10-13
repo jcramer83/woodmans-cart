@@ -150,28 +150,6 @@ Search the Woodmans catalog. Returns matching products with name, price, size, b
 
 ---
 
-## AI Recipe Generation
-
-### Generate a Recipe
-
-```
-POST /api/recipe/generate
-Body: { "prompt": "healthy chicken stir fry", "dietaryFlags": { "glutenFree": true } }
-```
-
-Generates a full recipe with ingredients using Claude AI. Available dietary flags: `glutenFree`, `dairyFree`, `organic`, `pickyEater`.
-
-### Get Recipe Suggestions
-
-```
-POST /api/recipe/suggest
-Body: { "prompt": "quick weeknight dinners", "count": 5 }
-```
-
-Returns recipe name ideas.
-
----
-
 ## Error Handling
 
 All endpoints return `{ "error": "message" }` on failure.
