@@ -9,7 +9,7 @@ const fs = require("fs");
 const PORT = 3456;
 
 function startServer(deps) {
-  const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, RECIPES_PATH, MANUAL_ITEMS_PATH } = deps;
+  const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, MANUAL_ITEMS_PATH } = deps;
 
   const app = express();
   app.use(express.json());
@@ -17,7 +17,6 @@ function startServer(deps) {
   // Serve renderer/ as static files, and assets/ for favicon etc.
   app.use(express.static(path.join(__dirname, "renderer")));
   app.use("/assets", express.static(path.join(__dirname, "assets")));
-  app.use("/data/recipe-images", express.static(path.join(__dirname, "data", "recipe-images")));
 
   const server = http.createServer(app);
 
@@ -140,28 +139,9 @@ function startServer(deps) {
     res.json({ ok: true });
   });
 
-  // Recipes
-  app.get("/api/recipes", function (req, res) {
-    res.json(readJSON(RECIPES_PATH) || []);
-  });
-
-  app.get("/api/recipes/active", function (req, res) {
-    var recipes = readJSON(RECIPES_PATH) || [];
-    var active = recipes.filter(function (r) { return r.enabled; }).map(function (r) {
-      return { id: r.id, name: r.name, items: r.items || [] };
-    });
-    res.json(active);
-  });
-
-  app.post("/api/recipes", function (req, res) {
-    writeJSON(RECIPES_PATH, req.body);
-    res.json({ ok: true });
-  });
-
-  // Get combined internal shopping cart (staples + enabled recipes + manual items)
+  // Get combined internal shopping cart (staples + manual items)
   app.get("/api/cart", function (req, res) {
     var staplesData = readJSON(STAPLES_PATH) || [];
-    var recipesData = readJSON(RECIPES_PATH) || [];
     var manualData = readJSON(MANUAL_ITEMS_PATH) || [];
     var items = [];
     var estimate = 0;
@@ -170,16 +150,6 @@ function startServer(deps) {
       var sp = parseFloat(String(s.price || "").replace("$", "")) || 0;
       items.push({ id: "staple-" + s.id, item: s.item, quantity: s.quantity || 1, price: s.price || "", source: "staple" });
       if (sp > 0) estimate += sp * (s.quantity || 1);
-    }
-    for (var j = 0; j < recipesData.length; j++) {
-      var r = recipesData[j];
-      if (!r.enabled) continue;
-      for (var k = 0; k < (r.items || []).length; k++) {
-        var ri = r.items[k];
-        var rp = parseFloat(String(ri.price || "").replace("$", "")) || 0;
-        items.push({ id: "recipe-" + r.id + "-" + (ri.item || ""), item: ri.item, quantity: ri.quantity || 1, price: ri.price || "", source: r.name });
-        if (rp > 0) estimate += rp * (ri.quantity || 1);
-      }
     }
     for (var m = 0; m < manualData.length; m++) {
       var mi = manualData[m];
@@ -259,23 +229,14 @@ function startServer(deps) {
     var clientSettings = body.settings || {};
     var items = body.items;
 
-    // If no items provided, build from internal cart (staples + enabled recipes + manual items)
+    // If no items provided, build from internal cart (staples + manual items)
     if (!items || items.length === 0) {
       var staplesData = readJSON(STAPLES_PATH) || [];
-      var recipesData = readJSON(RECIPES_PATH) || [];
-      var manualData = readJSON(MANUAL_ITEMS_PATH) || [];
+        var manualData = readJSON(MANUAL_ITEMS_PATH) || [];
       items = [];
       for (var si = 0; si < staplesData.length; si++) {
         var s = staplesData[si];
         items.push({ id: "staple-" + s.id, item: s.item, productName: s.productName || "", quantity: s.quantity || 1, note: s.note || "" });
-      }
-      for (var ri = 0; ri < recipesData.length; ri++) {
-        var r = recipesData[ri];
-        if (!r.enabled) continue;
-        for (var rj = 0; rj < (r.items || []).length; rj++) {
-          var rItem = r.items[rj];
-          items.push({ id: "recipe-" + r.id + "-" + (rItem.item || ""), item: rItem.item, productName: rItem.productName || "", quantity: rItem.quantity || 1, note: rItem.note || "" });
-        }
       }
       for (var mi = 0; mi < manualData.length; mi++) {
         var m = manualData[mi];
@@ -284,7 +245,7 @@ function startServer(deps) {
     }
 
     if (items.length === 0) {
-      return res.json({ error: "No items in cart. Add staples, enable recipes, or add manual items first." });
+      return res.json({ error: "No items in cart. Add staples or manual items first." });
     }
 
     const serverSettings = readJSON(SETTINGS_PATH) || {};
@@ -442,115 +403,6 @@ function startServer(deps) {
       sendProgress("Error: " + err.message);
       return res.json({ error: err.message });
     }
-  });
-
-  // Recipe image search (web) — search DuckDuckGo images, download & cache
-  app.post("/api/recipe/image", async function (req, res) {
-    const { recipeId, recipeName } = req.body;
-    if (!recipeId || !recipeName) {
-      return res.json({ error: "Missing recipeId or recipeName" });
-    }
-
-    const httpsModule = require("https");
-    const httpModule = require("http");
-    const imgDir = path.join(__dirname, "data", "recipe-images");
-    fs.mkdirSync(imgDir, { recursive: true });
-
-    // Helper: HTTP(S) GET returning a Buffer, follows redirects
-    var browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-    function httpGet(url, maxRedirects) {
-      if (maxRedirects === undefined) maxRedirects = 5;
-      return new Promise(function (resolve, reject) {
-        if (maxRedirects <= 0) return reject(new Error("Too many redirects"));
-        var mod = url.startsWith("https") ? httpsModule : httpModule;
-        var headers = { "User-Agent": browserUA, "Accept": "image/*,*/*;q=0.8" };
-        var req = mod.get(url, { headers: headers, timeout: 15000 }, function (resp) {
-          if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
-            var next = resp.headers.location;
-            if (next.startsWith("/")) {
-              var parsed = new URL(url);
-              next = parsed.protocol + "//" + parsed.host + next;
-            }
-            resolve(httpGet(next, maxRedirects - 1));
-            return;
-          }
-          if (resp.statusCode !== 200) {
-            resp.resume();
-            return reject(new Error("HTTP " + resp.statusCode));
-          }
-          var chunks = [];
-          resp.on("data", function (c) { chunks.push(c); });
-          resp.on("end", function () { resolve(Buffer.concat(chunks)); });
-          resp.on("error", reject);
-        });
-        req.on("error", reject);
-        req.on("timeout", function () { req.destroy(); reject(new Error("Timeout")); });
-      });
-    }
-
-    var query = recipeName + " recipe";
-
-    try {
-      // Step 1: Search Bing Images for recipe photos
-      var bingUrl = "https://www.bing.com/images/search?q=" + encodeURIComponent(query) + "&form=HDRSC3&first=1";
-      var pageData = await httpGet(bingUrl);
-      var pageStr = pageData.toString("utf-8");
-
-      // Extract image URLs from Bing results (embedded as escaped JSON murl fields)
-      var urlMatches = pageStr.match(/murl&quot;:&quot;(https?:\/\/[^&]+?)&quot;/g) || [];
-      var imageUrls = urlMatches.map(function (m) {
-        return m.replace(/^murl&quot;:&quot;/, "").replace(/&quot;$/, "");
-      });
-
-      if (imageUrls.length === 0) {
-        return res.json({ error: "No images found" });
-      }
-
-      // Step 2: Try downloading until one works
-      var imageData = null;
-      for (var i = 0; i < Math.min(imageUrls.length, 10); i++) {
-        try {
-          imageData = await httpGet(imageUrls[i]);
-          if (imageData && imageData.length > 5000) break;
-          imageData = null;
-        } catch (e) {
-          imageData = null;
-        }
-      }
-
-      if (!imageData) {
-        return res.json({ error: "Could not download any image" });
-      }
-
-      // Detect extension from content (JPEG starts with FFD8, PNG with 8950)
-      var ext = "jpg";
-      if (imageData[0] === 0x89 && imageData[1] === 0x50) ext = "png";
-      else if (imageData[0] === 0x52 && imageData[1] === 0x49) ext = "webp";
-
-      var imgPath = path.join(imgDir, recipeId + "." + ext);
-      fs.writeFileSync(imgPath, imageData);
-
-      var imageUrl = "/data/recipe-images/" + recipeId + "." + ext;
-      res.json({ ok: true, imageUrl: imageUrl });
-    } catch (err) {
-      res.json({ error: err.message });
-    }
-  });
-
-  // Delete recipe image
-  app.post("/api/recipe/image/delete", function (req, res) {
-    const { recipeId } = req.body;
-    if (!recipeId) return res.json({ ok: true });
-
-    const imgPath = path.join(__dirname, "data", "recipe-images", recipeId + ".png");
-    try {
-      if (fs.existsSync(imgPath)) {
-        fs.unlinkSync(imgPath);
-      }
-    } catch (e) {
-      // ignore cleanup errors
-    }
-    res.json({ ok: true });
   });
 
   // Checkout preview (fetch cart + service options — NEVER places order)

@@ -1,11 +1,8 @@
 // --- State ---
 let staples = [];
-let recipes = [];
 let manualItems = [];
 let settings = {};
 let editingStapleId = null;
-let editingRecipeId = null;
-let recipeItemsDraft = [];
 let excludedCartIds = new Set();
 let cartRunning = false;
 let removeProgressListener = null;
@@ -128,7 +125,6 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   // Show loading skeletons while data loads
   document.getElementById("staples-list").innerHTML = skeletonHTML(3);
-  document.getElementById("recipes-list").innerHTML = skeletonHTML(3);
 
   try {
     settings = (await appApi.loadSettings()) || {};
@@ -137,15 +133,11 @@ async function init() {
     staples = (await appApi.loadStaples()) || [];
   } catch (e) { console.warn("Failed to load staples:", e); }
   try {
-    recipes = (await appApi.loadRecipes()) || [];
-  } catch (e) { console.warn("Failed to load recipes:", e); }
-  try {
     manualItems = (await appApi.loadManualItems()) || [];
   } catch (e) { console.warn("Failed to load manual items:", e); }
 
   // Validate loaded data (guard against API returning error objects)
   if (!Array.isArray(staples)) staples = [];
-  if (!Array.isArray(recipes)) recipes = [];
   if (!Array.isArray(manualItems)) manualItems = [];
   if (typeof settings !== "object" || settings === null || settings.error) settings = {};
 
@@ -157,7 +149,6 @@ async function init() {
   initDarkMode();
   restoreCollapsedSections();
   renderStaples();
-  renderRecipes();
   renderCart();
   updateModeBadge();
   updateTimeSlotsVisibility();
@@ -193,21 +184,6 @@ function bindEvents() {
   });
   document.getElementById("btn-save-staple").addEventListener("click", saveStaple);
 
-  // Recipes
-  document.getElementById("btn-add-recipe").addEventListener("click", () => openRecipeModal(null));
-
-  // Recipe modal
-  document.getElementById("btn-add-recipe-item").addEventListener("click", addRecipeItemRow);
-  document.getElementById("btn-save-recipe").addEventListener("click", saveRecipe);
-
-  // Recipe item modal - product search
-  document.getElementById("btn-recipe-item-find").addEventListener("click", toggleRecipeItemSearch);
-  document.getElementById("btn-recipe-item-search-go").addEventListener("click", doRecipeItemSearch);
-  document.getElementById("btn-save-recipe-item").addEventListener("click", saveRecipeItem);
-  document.getElementById("recipe-item-search-query").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doRecipeItemSearch();
-  });
-
   // Online cart viewer
   document.getElementById("btn-import-cart").addEventListener("click", fetchOnlineCart);
   document.getElementById("btn-remove-all-online").addEventListener("click", removeAllOnlineCartItems);
@@ -226,6 +202,15 @@ function bindEvents() {
   // Cart automation
   document.getElementById("btn-start-cart").addEventListener("click", startCartAutomation);
   document.getElementById("btn-stop-cart").addEventListener("click", stopCartAutomation);
+
+  // Mobile cart bar
+  document.getElementById("mcb-start").addEventListener("click", () => {
+    if (cartRunning) stopCartAutomation();
+    else startCartAutomation();
+  });
+  document.getElementById("mcb-summary").addEventListener("click", () => {
+    document.getElementById("cart-section").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   // Modal close buttons
   document.querySelectorAll("[data-close]").forEach((btn) => {
@@ -296,17 +281,17 @@ function bindEvents() {
   // Click-outside dismissal for search results
   document.addEventListener("click", (e) => {
     // Staple search: dismiss if click is outside the search row and results
-    const stapleSearchRow = document.querySelector(".left-col .staple-search-row");
+    const stapleSearchRow = document.getElementById("staple-search-row");
     const stapleResults = document.getElementById("staple-search-results");
     if (stapleResults && stapleResults.style.display !== "none") {
-      if (!e.target.closest(".left-col .staple-search-row") && !e.target.closest("#staple-search-results")) {
+      if (!e.target.closest("#staple-search-row") && !e.target.closest("#staple-search-results")) {
         stapleResults.style.display = "none";
       }
     }
     // Manual search: dismiss if click is outside the search row and results
     const manualResults = document.getElementById("manual-search-results");
     if (manualResults && manualResults.style.display !== "none") {
-      if (!e.target.closest(".right-col .staple-search-row") && !e.target.closest("#manual-search-results")) {
+      if (!e.target.closest("#manual-search-row") && !e.target.closest("#manual-search-results")) {
         manualResults.style.display = "none";
       }
     }
@@ -360,6 +345,7 @@ function toggleSection(sectionId) {
   if (!content) return;
   content.classList.toggle("collapsed");
   if (btn) btn.classList.toggle("collapsed");
+  content.closest(".section").classList.toggle("is-collapsed", content.classList.contains("collapsed"));
   // Persist state
   const collapsed = JSON.parse(localStorage.getItem("collapsedSections") || "{}");
   collapsed[sectionId] = content.classList.contains("collapsed");
@@ -368,11 +354,16 @@ function toggleSection(sectionId) {
 
 function restoreCollapsedSections() {
   const collapsed = JSON.parse(localStorage.getItem("collapsedSections") || "{}");
+  // Staples start collapsed unless the user has expanded them before
+  if (!("staples" in collapsed)) collapsed.staples = true;
   for (const [sectionId, isCollapsed] of Object.entries(collapsed)) {
     if (!isCollapsed) continue;
     const content = document.getElementById("section-" + sectionId);
     const btn = content ? content.closest(".section").querySelector(".collapse-btn") : null;
-    if (content) content.classList.add("collapsed");
+    if (content) {
+      content.classList.add("collapsed");
+      content.closest(".section").classList.add("is-collapsed");
+    }
     if (btn) btn.classList.add("collapsed");
   }
 }
@@ -545,369 +536,6 @@ async function selectStapleSearchResult(index) {
   document.getElementById("staple-search-query").focus();
 }
 
-// --- Recipes ---
-
-function renderRecipes() {
-  const list = document.getElementById("recipes-list");
-  if (recipes.length === 0) {
-    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-recipes.png" alt="" />No recipes yet. Click "+ Manual" to add one.</p>';
-    return;
-  }
-
-  list.innerHTML = recipes
-    .map(
-      (r, i) => `
-    <div class="item-row" data-id="${r.id}" draggable="true" ondragstart="dragStartItem(event,'recipe',${i})" ondragover="dragOverItem(event)" ondragleave="dragLeaveItem(event)" ondrop="dropItem(event,'recipe',${i})" ondragend="dragEndItem(event)">
-      <label class="toggle">
-        <input type="checkbox" ${r.enabled ? "checked" : ""} onchange="toggleRecipe('${r.id}', this.checked)" />
-        <span class="toggle-slider"></span>
-      </label>
-      ${r.imageUrl ? `<img class="item-thumb" src="${esc(r.imageUrl)}" alt="">` : ""}
-      <div class="item-info">
-        <div class="item-name">${esc(r.name)}</div>
-        <div class="item-detail">${(r.items || []).length} item${(r.items || []).length !== 1 ? "s" : ""}</div>
-      </div>
-      <div class="item-actions">
-        ${r.instructions && r.instructions.length > 0 ? `<button onclick="viewRecipe('${r.id}')" title="View Recipe">&#128220;</button>` : ""}
-        <button onclick="openRecipeModal('${r.id}')" title="Edit">&#9998;</button>
-        <button class="btn-del" onclick="deleteRecipe('${r.id}')" title="Delete">&#10005;</button>
-      </div>
-    </div>`
-    )
-    .join("");
-}
-
-async function toggleRecipe(id, enabled) {
-  const recipe = recipes.find((r) => r.id === id);
-  if (recipe) {
-    recipe.enabled = enabled;
-    // Clear exclusions for this recipe's items so they reappear in cart
-    if (enabled) {
-      for (const item of recipe.items || []) {
-        excludedCartIds.delete("recipe-" + id + "-" + (item.item || ""));
-      }
-    }
-    await appApi.saveRecipes(recipes);
-    renderCart();
-  }
-}
-
-function openRecipeModal(id) {
-  editingRecipeId = id;
-  const recipe = id ? recipes.find((r) => r.id === id) : null;
-
-  document.getElementById("recipe-modal-title").textContent = recipe ? "Edit Recipe" : "Add Recipe";
-  document.getElementById("recipe-name").value = recipe ? recipe.name : "";
-
-  recipeItemsDraft = recipe ? JSON.parse(JSON.stringify(recipe.items || [])) : [];
-  renderRecipeItems();
-
-  showModal("modal-recipe");
-  document.getElementById("recipe-name").focus();
-}
-
-function renderRecipeItems() {
-  const list = document.getElementById("recipe-items-list");
-  if (recipeItemsDraft.length === 0) {
-    list.innerHTML = '<p class="empty-state">No ingredients yet. Click "+ Add Item".</p>';
-    return;
-  }
-
-  list.innerHTML = recipeItemsDraft
-    .map(
-      (item, i) => `
-    <div class="item-row">
-      ${item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : ""}
-      <div class="item-info">
-        <div class="item-name">${esc(item.item || "(unnamed)")}</div>
-        <div class="item-detail">${esc(item.productName || "")}${item.note ? " (" + esc(item.note) + ")" : ""}${item.price ? " - " + esc(item.price) : ""}</div>
-      </div>
-      <span class="item-qty">x${item.quantity || 1}</span>
-      <div class="item-actions">
-        <button onclick="openRecipeItemModal(${i})" title="Edit">&#9998;</button>
-        <button class="btn-del" onclick="removeRecipeItem(${i})" title="Remove">&#10005;</button>
-      </div>
-    </div>`
-    )
-    .join("");
-}
-
-let editingRecipeItemIndex = null;
-
-function addRecipeItemRow() {
-  openRecipeItemModal(-1);
-}
-
-function openRecipeItemModal(index) {
-  editingRecipeItemIndex = index;
-  const item = index >= 0 ? recipeItemsDraft[index] : null;
-
-  document.getElementById("recipe-item-modal-title").textContent = item ? "Edit Ingredient" : "Add Ingredient";
-  document.getElementById("recipe-item-name").value = item ? item.item || "" : "";
-  document.getElementById("recipe-item-quantity").value = item ? item.quantity || 1 : 1;
-  document.getElementById("recipe-item-note").value = item ? item.note || "" : "";
-  document.getElementById("recipe-item-product-name").value = item ? item.productName || "" : "";
-  document.getElementById("recipe-item-search-area").style.display = "none";
-  document.getElementById("recipe-item-search-results").innerHTML =
-    '<p class="empty-state">Enter a search term and click Search.</p>';
-
-  window._recipeItemSelectedPrice = item ? item.price || "" : "";
-  window._recipeItemSelectedImage = item ? item.image || "" : "";
-  showModal("modal-recipe-item");
-  document.getElementById("recipe-item-name").focus();
-}
-
-function saveRecipeItem() {
-  const name = document.getElementById("recipe-item-name").value.trim();
-  const productName = document.getElementById("recipe-item-product-name").value.trim();
-  if (!name && !productName) return;
-
-  const data = {
-    item: name || productName,
-    quantity: parseInt(document.getElementById("recipe-item-quantity").value) || 1,
-    note: document.getElementById("recipe-item-note").value.trim(),
-    productName: productName,
-    price: window._recipeItemSelectedPrice || "",
-    image: window._recipeItemSelectedImage || "",
-  };
-
-  if (editingRecipeItemIndex >= 0) {
-    recipeItemsDraft[editingRecipeItemIndex] = data;
-  } else {
-    recipeItemsDraft.push(data);
-  }
-
-  renderRecipeItems();
-  hideModal("modal-recipe-item");
-}
-
-function toggleRecipeItemSearch() {
-  const area = document.getElementById("recipe-item-search-area");
-  area.style.display = area.style.display === "none" ? "block" : "none";
-  if (area.style.display === "block") {
-    const itemName = document.getElementById("recipe-item-name").value.trim();
-    document.getElementById("recipe-item-search-query").value = itemName;
-    document.getElementById("recipe-item-search-query").focus();
-  }
-}
-
-async function doRecipeItemSearch() {
-  const query = document.getElementById("recipe-item-search-query").value.trim();
-  if (!query) return;
-
-  const resultsDiv = document.getElementById("recipe-item-search-results");
-  resultsDiv.innerHTML = skeletonHTML(3);
-  document.getElementById("btn-recipe-item-search-go").disabled = true;
-  showActivity("cart-activity", "cart-activity-status", "Searching Woodmans for \"" + query + "\"...");
-
-  try {
-    const products = await appApi.searchProducts(query);
-
-    if (products.error) {
-      resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(products.error)}</p>`;
-      hideActivity("cart-activity", "cart-activity-status", "Search failed: " + products.error, "error");
-      return;
-    }
-
-    if (!products || products.length === 0) {
-      resultsDiv.innerHTML = '<p class="empty-state">No products found. Try a different search term.</p>';
-      hideActivity("cart-activity", "cart-activity-status", "No products found", "error");
-      return;
-    }
-
-    resultsDiv.innerHTML = products
-      .map(
-        (p, i) => `
-      <div class="product-result-row" onclick="selectRecipeItemProduct(${i})">
-        ${p.image ? `<img class="product-result-thumb" src="${esc(p.image)}" alt="">` : ""}
-        <div class="product-result-info">
-          <div class="product-result-name">${esc(p.name)}</div>
-          <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
-        </div>
-      </div>`
-      )
-      .join("");
-
-    window._recipeItemSearchResults = products;
-    hideActivity("cart-activity", "cart-activity-status", "Found " + products.length + " products", "success");
-  } catch (err) {
-    resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(err.message)}</p>`;
-    hideActivity("cart-activity", "cart-activity-status", "Search error: " + err.message, "error");
-  } finally {
-    document.getElementById("btn-recipe-item-search-go").disabled = false;
-  }
-}
-
-function selectRecipeItemProduct(index) {
-  const products = window._recipeItemSearchResults;
-  if (!products || !products[index]) return;
-
-  const p = products[index];
-  document.getElementById("recipe-item-product-name").value = p.name;
-  window._recipeItemSelectedPrice = p.price || "";
-  window._recipeItemSelectedImage = p.image || "";
-  const nameField = document.getElementById("recipe-item-name");
-  if (!nameField.value.trim()) {
-    nameField.value = p.name;
-  }
-  document.getElementById("recipe-item-search-area").style.display = "none";
-}
-
-function updateRecipeItem(index, field, value) {
-  if (recipeItemsDraft[index]) {
-    recipeItemsDraft[index][field] = value;
-  }
-}
-
-function removeRecipeItem(index) {
-  recipeItemsDraft.splice(index, 1);
-  renderRecipeItems();
-}
-
-async function saveRecipe() {
-  const name = document.getElementById("recipe-name").value.trim();
-  if (!name) return;
-
-  // Filter out empty items
-  const items = recipeItemsDraft.filter((item) => item.item && item.item.trim());
-
-  if (editingRecipeId) {
-    const idx = recipes.findIndex((r) => r.id === editingRecipeId);
-    if (idx !== -1) {
-      recipes[idx].name = name;
-      recipes[idx].items = items;
-    }
-  } else {
-    recipes.push({
-      id: generateId(),
-      name,
-      enabled: true,
-      items,
-    });
-  }
-
-  await appApi.saveRecipes(recipes);
-  renderRecipes();
-  renderCart();
-  hideModal("modal-recipe");
-  showToast("Recipe saved", "success");
-}
-
-async function deleteRecipe(id) {
-  if (!confirm("Delete this recipe?")) return;
-  appApi.deleteRecipeImage(id);
-  recipes = recipes.filter((r) => r.id !== id);
-  await appApi.saveRecipes(recipes);
-  renderRecipes();
-  renderCart();
-  showToast("Recipe deleted");
-}
-
-// --- View Recipe ---
-
-let viewingRecipeId = null;
-
-function viewRecipe(id) {
-  const recipe = recipes.find((r) => r.id === id);
-  if (!recipe) return;
-
-  viewingRecipeId = id;
-  document.getElementById("view-recipe-title").textContent = recipe.name;
-
-  const imgEl = document.getElementById("view-recipe-image");
-  if (recipe.imageUrl) {
-    imgEl.src = recipe.imageUrl + "?t=" + Date.now();
-    imgEl.alt = recipe.name;
-    imgEl.style.display = "block";
-  } else {
-    imgEl.style.display = "none";
-    imgEl.src = "";
-  }
-
-  const servingsEl = document.getElementById("view-recipe-servings");
-  servingsEl.textContent = recipe.servings ? "Serves " + recipe.servings : "";
-
-  const ingredientsList = document.getElementById("view-recipe-ingredients");
-  const items = recipe.items || [];
-  if (items.length > 0) {
-    ingredientsList.innerHTML = items
-      .map((item) => {
-        const thumb = item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : "";
-        let text = "";
-        if (item.quantity && item.quantity > 1) text += item.quantity + "x ";
-        text += esc(item.productName || item.item || "");
-        if (item.note) text += " (" + esc(item.note) + ")";
-        if (item.price) text += " - " + esc(item.price);
-        return `<li>${thumb}${text}</li>`;
-      })
-      .join("");
-  } else {
-    ingredientsList.innerHTML = '<li class="empty-state">No ingredients</li>';
-  }
-
-  const instructionsList = document.getElementById("view-recipe-instructions");
-  const instructions = recipe.instructions || [];
-  if (instructions.length > 0) {
-    instructionsList.innerHTML = instructions
-      .map((step) => "<li>" + esc(step) + "</li>")
-      .join("");
-  } else {
-    instructionsList.innerHTML = '<li class="empty-state">No instructions available</li>';
-  }
-
-  showModal("modal-view-recipe");
-}
-
-function printRecipe() {
-  window.print();
-}
-
-function openRecipeExternal() {
-  const recipe = viewingRecipeId ? recipes.find((r) => r.id === viewingRecipeId) : null;
-  if (!recipe) return;
-
-  const items = recipe.items || [];
-  const instructions = recipe.instructions || [];
-
-  let imgTag = "";
-  if (recipe.imageUrl) {
-    // Convert relative URL to absolute for the blob page
-    const absUrl = new URL(recipe.imageUrl, location.origin).href;
-    imgTag = '<img src="' + esc(absUrl) + '" style="width:100%;max-height:400px;object-fit:cover;border-radius:8px;margin-bottom:16px;" alt="' + esc(recipe.name) + '" />';
-  }
-
-  const ingredientsHtml = items.length > 0
-    ? "<ul>" + items.map((item) => {
-        let text = "";
-        if (item.quantity && item.quantity > 1) text += item.quantity + "x ";
-        text += esc(item.item || "");
-        if (item.note) text += " (" + esc(item.note) + ")";
-        return "<li>" + text + "</li>";
-      }).join("") + "</ul>"
-    : "<p>No ingredients</p>";
-
-  const instructionsHtml = instructions.length > 0
-    ? "<ol>" + instructions.map((step) => "<li>" + esc(step) + "</li>").join("") + "</ol>"
-    : "<p>No instructions available</p>";
-
-  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(recipe.name) + '</title>'
-    + '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6;}'
-    + 'h1{color:#b71c1c;margin-bottom:4px;}p.servings{color:#666;margin-bottom:16px;font-size:15px;}'
-    + 'h2{font-size:18px;margin-top:20px;margin-bottom:8px;border-bottom:2px solid #eee;padding-bottom:4px;}'
-    + 'ul{padding-left:20px;}ol{padding-left:24px;}li{padding:3px 0;}'
-    + 'img{display:block;}</style></head><body>'
-    + imgTag
-    + '<h1>' + esc(recipe.name) + '</h1>'
-    + (recipe.servings ? '<p class="servings">Serves ' + recipe.servings + '</p>' : '')
-    + '<h2>Ingredients</h2>' + ingredientsHtml
-    + '<h2>Instructions</h2>' + instructionsHtml
-    + '</body></html>';
-
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank");
-}
-
 // --- Combined Cart ---
 
 function getCartItems() {
@@ -925,23 +553,6 @@ function getCartItems() {
       image: s.image || "",
       source: "staple",
     });
-  }
-
-  // Enabled recipe items
-  for (const r of recipes) {
-    if (!r.enabled) continue;
-    for (const item of r.items || []) {
-      items.push({
-        id: "recipe-" + r.id + "-" + (item.item || ""),
-        item: item.item,
-        productName: item.productName,
-        quantity: item.quantity || 1,
-        note: item.note,
-        price: item.price || "",
-        image: item.image || "",
-        source: r.name,
-      });
-    }
   }
 
   // Manual items
@@ -979,9 +590,10 @@ function renderCart() {
     }
   }
   estEl.textContent = hasEstimate ? `Est. $${total.toFixed(2)}` : "";
+  updateMobileCartBar(items.length, hasEstimate ? total : null);
 
   if (items.length === 0) {
-    list.innerHTML = '<p class="empty-state">Cart is empty. Add staples or search below to add items.</p>';
+    list.innerHTML = '<p class="empty-state">Cart is empty. Use Add Items or Weekly Staples to fill it.</p>';
   } else {
   list.innerHTML = items
     .map(
@@ -1009,14 +621,13 @@ function renderCart() {
     .join("");
   }
 
-  // Lock/unlock manual search and staple/recipe controls
-  const manualSearchRow = document.querySelector(".right-col .staple-search-row");
+  // Lock/unlock manual search and staple controls
+  const manualSearchRow = document.getElementById("manual-search-row");
   if (manualSearchRow) manualSearchRow.style.display = cartRunning ? "none" : "flex";
   const manualResults = document.getElementById("manual-search-results");
   if (manualResults && cartRunning) manualResults.style.display = "none";
   document.getElementById("btn-clear-cart").style.display = cartRunning ? "none" : "inline-flex";
   document.getElementById("btn-add-all-staples").disabled = cartRunning;
-  document.getElementById("btn-add-recipe").disabled = cartRunning;
 }
 
 function removeManualItem(id) {
@@ -1058,21 +669,6 @@ function changeCartQty(id, delta) {
       renderStaples();
       renderCart();
     }
-  } else if (id.startsWith("recipe-")) {
-    // id format: recipe-{recipeId}-{itemName}
-    const parts = id.replace("recipe-", "").split("-");
-    const recipeId = parts[0];
-    const itemName = parts.slice(1).join("-");
-    const r = recipes.find((x) => x.id === recipeId);
-    if (r) {
-      const item = (r.items || []).find((x) => x.item === itemName);
-      if (item) {
-        item.quantity = Math.max(1, (item.quantity || 1) + delta);
-        appApi.saveRecipes(recipes);
-        renderRecipes();
-        renderCart();
-      }
-    }
   } else if (id.startsWith("manual-")) {
     const realId = id.replace("manual-", "");
     const m = manualItems.find((x) => x.id === realId);
@@ -1082,6 +678,30 @@ function changeCartQty(id, delta) {
       renderCart();
     }
   }
+}
+
+// --- Mobile cart bar ---
+
+function syncHeaderHeight() {
+  const h = document.querySelector(".app-header");
+  if (h) document.documentElement.style.setProperty("--header-h", h.offsetHeight + "px");
+}
+window.addEventListener("resize", syncHeaderHeight);
+document.addEventListener("DOMContentLoaded", syncHeaderHeight);
+
+let mcbLast = { count: 0, total: null };
+function updateMobileCartBar(count, total) {
+  if (count !== undefined) mcbLast = { count, total };
+  const countEl = document.getElementById("mcb-count");
+  if (!countEl) return;
+  countEl.textContent = mcbLast.count + (mcbLast.count === 1 ? " item" : " items");
+  document.getElementById("mcb-est").textContent = mcbLast.total != null ? "Est. $" + mcbLast.total.toFixed(2) : "";
+  const btn = document.getElementById("mcb-start");
+  document.body.classList.toggle("cart-running", cartRunning);
+  btn.textContent = cartRunning ? "Stop" : "Add to Woodmans";
+  btn.classList.toggle("btn-danger", cartRunning);
+  btn.classList.toggle("btn-accent", !cartRunning);
+  btn.disabled = !cartRunning && mcbLast.count === 0;
 }
 
 // --- Manual item product search (same pattern as staples) ---
@@ -1112,11 +732,12 @@ async function doManualSearch() {
       .map(
         (p, i) => `
       <div class="product-result-row" onclick="selectManualProduct(${i})">
-        ${p.image ? `<img class="product-result-thumb" src="${esc(p.image)}" alt="">` : ""}
+        ${p.image ? `<img class="product-result-thumb" src="${esc(p.image)}" alt="">` : '<span class="product-result-thumb placeholder">&#128722;</span>'}
         <div class="product-result-info">
           <div class="product-result-name">${esc(p.name)}</div>
           <div class="product-result-meta">${esc(p.price)}${p.size ? " - " + esc(p.size) : ""}</div>
         </div>
+        <span class="product-result-add" aria-hidden="true">+ Add</span>
       </div>`
       )
       .join("");
@@ -1683,7 +1304,7 @@ async function placeOrder() {
 async function startCartAutomation() {
   const items = getCartItems().filter((item) => !excludedCartIds.has(item.id));
   if (items.length === 0) {
-    alert("No items in the cart. Add staples, enable recipes, or add items manually.");
+    alert("No items in the cart. Add staples or search to add items.");
     return;
   }
 
@@ -1692,6 +1313,7 @@ async function startCartAutomation() {
   cartItemResults = {};
   document.getElementById("btn-start-cart").style.display = "none";
   document.getElementById("btn-stop-cart").style.display = "inline-flex";
+  updateMobileCartBar();
   renderCart();
 
   const statusLine = document.getElementById("cart-status-line");
@@ -1755,31 +1377,12 @@ async function startCartAutomation() {
       }
     }
 
-    // Auto-disable recipes whose items were all successfully added
-    let recipesChanged = false;
-    for (const r of recipes) {
-      if (!r.enabled) continue;
-      const recipeItems = r.items || [];
-      const recipeItemIds = recipeItems.map((item) => "recipe-" + r.id + "-" + (item.item || ""));
-      const allOk = recipeItemIds.length > 0 && recipeItemIds.every((id) => cartItemResults[id] === "ok");
-      if (allOk) {
-        r.enabled = false;
-        recipesChanged = true;
-      }
-    }
-    if (recipesChanged) {
-      try {
-        await appApi.saveRecipes(recipes);
-        renderRecipes();
-      } catch (e) {
-        console.warn("Failed to save recipe state after automation:", e);
-      }
-    }
   } finally {
     cartRunning = false;
     cartOperationActive = false;
     document.getElementById("btn-start-cart").style.display = "inline-flex";
     document.getElementById("btn-stop-cart").style.display = "none";
+    updateMobileCartBar();
     renderCart();
   }
 }
@@ -1799,6 +1402,7 @@ async function stopCartAutomation() {
     cartOperationActive = false;
   document.getElementById("btn-start-cart").style.display = "inline-flex";
   document.getElementById("btn-stop-cart").style.display = "none";
+  updateMobileCartBar();
   renderCart();
 }
 
@@ -1889,19 +1493,12 @@ function dropItem(e, type, index) {
   const fromIndex = data.index;
   if (fromIndex === index) return;
 
-  const arr = type === "staple" ? staples : recipes;
-  const [moved] = arr.splice(fromIndex, 1);
-  arr.splice(index, 0, moved);
-
-  if (type === "staple") {
-    appApi.saveStaples(staples);
-    renderStaples();
-    renderCart();
-  } else {
-    appApi.saveRecipes(recipes);
-    renderRecipes();
-    renderCart();
-  }
+  if (type !== "staple") return;
+  const [moved] = staples.splice(fromIndex, 1);
+  staples.splice(index, 0, moved);
+  appApi.saveStaples(staples);
+  renderStaples();
+  renderCart();
 }
 
 function dragEndItem(e) {
@@ -1940,20 +1537,10 @@ window.deleteStaple = deleteStaple;
 window.changeStapleQty = changeStapleQty;
 window.addSingleStapleToCart = addSingleStapleToCart;
 window.selectStapleSearchResult = selectStapleSearchResult;
-window.openRecipeModal = openRecipeModal;
-window.deleteRecipe = deleteRecipe;
-window.toggleRecipe = toggleRecipe;
-window.updateRecipeItem = updateRecipeItem;
-window.removeRecipeItem = removeRecipeItem;
 window.removeManualItem = removeManualItem;
 window.removeCartItem = removeCartItem;
 window.changeCartQty = changeCartQty;
-window.openRecipeItemModal = openRecipeItemModal;
-window.selectRecipeItemProduct = selectRecipeItemProduct;
 window.selectManualProduct = selectManualProduct;
-window.viewRecipe = viewRecipe;
-window.printRecipe = printRecipe;
-window.openRecipeExternal = openRecipeExternal;
 window.toggleShoppingMode = toggleShoppingMode;
 window.toggleDarkMode = toggleDarkMode;
 window.toggleSection = toggleSection;

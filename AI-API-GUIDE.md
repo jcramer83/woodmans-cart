@@ -8,7 +8,7 @@ All POST endpoints accept JSON bodies (`Content-Type: application/json`).
 
 ## Shopping Cart
 
-The shopping cart combines three sources: weekly staples, enabled recipe ingredients, and manually added items.
+The shopping cart combines two sources: weekly staples and manually added items.
 
 ### View Cart
 
@@ -21,7 +21,6 @@ Response:
 {
   "items": [
     { "id": "staple-abc", "item": "A2 Milk Whole Milk 59 Oz", "quantity": 3, "price": "", "source": "staple" },
-    { "id": "recipe-xyz-Ground Beef", "item": "Ground Beef", "quantity": 1, "price": "", "source": "Tacos" },
     { "id": "manual-m1abc", "item": "Bananas", "quantity": 2, "price": "", "source": "manual" }
   ],
   "itemCount": 3,
@@ -29,7 +28,7 @@ Response:
 }
 ```
 
-The `source` field indicates where the item comes from: `"staple"` for weekly staples, a recipe name for recipe ingredients, or `"manual"` for manually added items. The `estimatedTotal` is calculated from items that have price data (not all items have prices stored).
+The `source` field indicates where the item comes from: `"staple"` for weekly staples, or `"manual"` for manually added items. The `estimatedTotal` is calculated from items that have price data (not all items have prices stored).
 
 ### Add Item to Cart
 
@@ -108,38 +107,6 @@ DELETE /api/staples/:id
 
 ---
 
-## Recipes
-
-### View Active Recipes
-
-```
-GET /api/recipes/active
-```
-
-Returns only enabled recipes with their ingredients:
-```json
-[
-  {
-    "id": "abc123",
-    "name": "Tacos",
-    "items": [
-      { "item": "Ground Beef", "quantity": 1, "note": "1 lb" },
-      { "item": "Taco Shells", "quantity": 1 }
-    ]
-  }
-]
-```
-
-### View All Recipes
-
-```
-GET /api/recipes
-```
-
-Returns all recipes including disabled ones. Each recipe has an `enabled` boolean.
-
----
-
 ## Product Search
 
 ```
@@ -171,9 +138,6 @@ curl -X POST localhost:3456/api/staples \
 
 # View the full cart
 curl localhost:3456/api/cart
-
-# View active recipes
-curl localhost:3456/api/recipes/active
 
 # Search for a product
 curl "localhost:3456/api/products/search?q=organic+milk"

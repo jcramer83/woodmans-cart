@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Woodmans Cart is a web app that automates adding grocery items to a ShopWoodmans.com cart, previewing checkout, and placing orders. It has a GUI for managing weekly staple items, recipes with ingredients, and one-click cart automation. Runs as a standalone Express web server (designed for Docker/Unraid deployment).
+Woodmans Cart is a web app that automates adding grocery items to a ShopWoodmans.com cart, previewing checkout, and placing orders. It has a GUI for searching/adding items, managing weekly staple items, and one-click cart automation. Runs as a standalone Express web server (designed for Docker/Unraid deployment).
 
 ## Commands
 
@@ -29,9 +29,7 @@ Express + WebSocket server. Accepts a `deps` object with `readJSON`, `writeJSON`
 - `GET/POST /api/settings` — User credentials and preferences
 - `GET/POST /api/staples` — Weekly staple items (POST with object adds one, with array replaces all)
 - `PATCH/DELETE /api/staples/:id` — Update or remove a single staple
-- `GET/POST /api/recipes` — Recipe definitions
-- `GET /api/recipes/active` — Only enabled recipes with ingredients
-- `GET /api/cart` — Combined internal cart (staples + enabled recipes + manual items) with estimated total
+- `GET /api/cart` — Combined internal cart (staples + manual items) with estimated total
 - `POST /api/cart/add` — Add item to internal cart (auto-enriches with Woodmans image/price)
 - `GET/POST/PATCH/DELETE /api/cart/manual` — Manual cart item CRUD
 - `GET/POST /api/shopping-mode` — Get/set shopping mode (pickup or instore)
@@ -47,8 +45,6 @@ Express + WebSocket server. Accepts a `deps` object with `readJSON`, `writeJSON`
 - `POST /api/checkout/select-timeslot` — Reserve a time slot on Woodmans
 - `POST /api/checkout/place-order` — Place order (charges card on file)
 - `POST /api/checkout/service-options` — Fetch service chooser (pickup vs delivery)
-- `POST /api/recipe/image` — Scrape Bing Images for recipe photo, cache to `data/recipe-images/`
-- `POST /api/recipe/image/delete` — Delete cached recipe image
 
 See `AI-API-GUIDE.md` for the external AI integration API (subset of above focused on internal cart management).
 
@@ -99,9 +95,7 @@ When items are added via `POST /api/cart/add` or `POST /api/staples` (single ite
 
 - `settings.json` — credentials, store URL, delays, shopping mode, phone number. **Contains real credentials — never commit** (excluded via `.gitignore`).
 - `staples.json` — array of items with optional productName/brand/price/image
-- `recipes.json` — array of recipes with enabled flag and items sub-array
 - `manual-items.json` — manually added cart items
-- `recipe-images/` — cached recipe photos from Bing scraping (excluded via `.gitignore`)
 
 All use whole-array load/save pattern via `readJSON`/`writeJSON`.
 
@@ -125,11 +119,10 @@ Used in Docker deployments, overlaid onto settings by `server-standalone.js`:
 ## Key Patterns
 
 - **Product search** scrapes clean names from URL slugs (`/products/123-product-name`) rather than DOM text to avoid badge/label contamination.
-- **Cart removal** uses an `excludedCartIds` Set in the renderer — items are hidden from cart view without deleting source staples/recipes.
-- **Recipe item editing** uses a sub-modal (`modal-recipe-item`) with its own product search, mirroring the staple modal's search flow.
+- **Cart removal** uses an `excludedCartIds` Set in the renderer — items are hidden from cart view without deleting source staples.
 - ShopWoodmans.com is an Instacart white-label React SPA — its GraphQL API uses persisted query hashes and requires specific cookie/header patterns.
 - **Progress message routing** — WebSocket progress messages are routed client-side using a `cartOperationActive` flag: messages go to the online cart activity area only during cart operations (fetch/remove/add); all other progress goes to the main status line below checkout preview.
-- **`POST /api/cart/start`** builds items from internal cart (staples + enabled recipes + manual items) when called with no body, so API callers don't need to provide items.
+- **`POST /api/cart/start`** builds items from internal cart (staples + manual items) when called with no body, so API callers don't need to provide items.
 
 ## POC Research Files
 

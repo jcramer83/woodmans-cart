@@ -75,19 +75,12 @@
     loadStaples: function () { return apiGet("/api/staples"); },
     saveStaples: function (staples) { return apiPost("/api/staples", staples); },
 
-    // Recipes
-    loadRecipes: function () { return apiGet("/api/recipes"); },
-    saveRecipes: function (recipes) { return apiPost("/api/recipes", recipes); },
-
     // Cart automation
     startCart: function (data) { return apiPost("/api/cart/start", data); },
     stopCart: function () { return apiPost("/api/cart/stop"); },
 
     // Product search
     searchProducts: function (query) { return apiGet("/api/products/search?q=" + encodeURIComponent(query)); },
-
-    // Recipe image generation
-    deleteRecipeImage: function (id) { return apiPost("/api/recipe/image/delete", { recipeId: id }); },
 
     // Fetch current online cart
     fetchCurrentCart: function (mode) { return apiPost("/api/cart/fetch", { shoppingMode: mode }); },

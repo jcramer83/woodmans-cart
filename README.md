@@ -4,14 +4,13 @@
 
 # Woodman's Cart
 
-Automate your grocery shopping on [Woodmans-Food.com](https://www.woodmans-food.com). Manage weekly staples, build recipes, and add everything to your online cart with one click.
+Automate your grocery shopping on [Woodmans-Food.com](https://www.woodmans-food.com). Search and add items, manage weekly staples, and send everything to your online cart with one click.
 
 Runs as an **Electron desktop app** or a **standalone web server** (for Docker/Unraid).
 
 ## Features
 
 - **Staple Items** &mdash; Maintain a list of weekly essentials that get added to your cart every time
-- **Recipe Management** &mdash; Create recipes with ingredients, enable/disable them per week
 - **Product Search** &mdash; Search the Woodman's catalog and link exact products to your items
 - **One-Click Cart** &mdash; Adds all enabled items to your Woodmans-Food.com cart automatically
 - **Two Automation Modes**
@@ -55,7 +54,7 @@ Then open `http://localhost:3456` in your browser.
 
 1. **Configure** your Woodman's credentials in Settings
 2. **Add staples** &mdash; your recurring weekly items
-3. **Create recipes** &mdash; toggle them on/off each week
+3. **Search and add items** &mdash; build this trip's cart from the Add Items search
 4. **Hit "Add to Cart"** &mdash; the app logs into Woodmans-Food.com and adds everything automatically
 
 In **Standard mode**, Playwright drives a real browser through the checkout flow. In **Fast mode**, it logs in once to grab session cookies, then fires GraphQL API calls directly &mdash; much faster but dependent on Instacart's API stability.
