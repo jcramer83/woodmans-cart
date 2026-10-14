@@ -283,9 +283,10 @@ function bindEvents() {
     // Staple search: dismiss if click is outside the search row and results
     const stapleSearchRow = document.getElementById("staple-search-row");
     const stapleResults = document.getElementById("staple-search-results");
-    if (stapleResults && stapleResults.style.display !== "none") {
+    // (staple results are shown/hidden only via the "visible" class; never set inline display)
+    if (stapleResults && stapleResults.classList.contains("visible")) {
       if (!e.target.closest("#staple-search-row") && !e.target.closest("#staple-search-results")) {
-        stapleResults.style.display = "none";
+        stapleResults.classList.remove("visible");
       }
     }
     // Manual search: dismiss if click is outside the search row and results
@@ -465,24 +466,28 @@ function addSingleStapleToCart(id) {
 
 // --- Staple search (inline) ---
 
+let stapleSearchSeq = 0;
 async function doStapleSearch() {
   const query = document.getElementById("staple-search-query").value.trim();
   if (!query) return;
+  const seq = ++stapleSearchSeq;
 
   const resultsDiv = document.getElementById("staple-search-results");
+  resultsDiv.style.display = "";
   resultsDiv.classList.add("visible");
   resultsDiv.innerHTML = skeletonHTML(3);
   document.getElementById("btn-staple-search").disabled = true;
 
   try {
     const products = await appApi.searchProducts(query);
+    if (seq !== stapleSearchSeq) return; // a newer search started; drop this stale response
 
-    if (products.error) {
-      resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(products.error)}</p>`;
+    if (!products || products.error) {
+      resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc((products && products.error) || "Search failed")}</p>`;
       return;
     }
 
-    if (!products || products.length === 0) {
+    if (products.length === 0) {
       resultsDiv.innerHTML = '<p class="empty-state">No products found. Try a different search.</p>';
       return;
     }
@@ -502,9 +507,9 @@ async function doStapleSearch() {
 
     window._stapleSearchResults = products;
   } catch (err) {
-    resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(err.message)}</p>`;
+    if (seq === stapleSearchSeq) resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(err.message)}</p>`;
   } finally {
-    document.getElementById("btn-staple-search").disabled = false;
+    if (seq === stapleSearchSeq) document.getElementById("btn-staple-search").disabled = false;
   }
 }
 
@@ -531,6 +536,8 @@ async function selectStapleSearchResult(index) {
   showToast("Added " + p.name, "success");
 
   // Clear search
+  stapleSearchSeq++;
+  document.getElementById("btn-staple-search").disabled = false;
   document.getElementById("staple-search-query").value = "";
   document.getElementById("staple-search-results").classList.remove("visible");
   document.getElementById("staple-search-query").focus();
@@ -706,9 +713,11 @@ function updateMobileCartBar(count, total) {
 
 // --- Manual item product search (same pattern as staples) ---
 
+let manualSearchSeq = 0;
 async function doManualSearch() {
   const query = document.getElementById("manual-search-query").value.trim();
   if (!query) return;
+  const seq = ++manualSearchSeq;
 
   const resultsDiv = document.getElementById("manual-search-results");
   resultsDiv.style.display = "block";
@@ -717,13 +726,14 @@ async function doManualSearch() {
 
   try {
     const products = await appApi.searchProducts(query);
+    if (seq !== manualSearchSeq) return; // stale response
 
-    if (products.error) {
-      resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(products.error)}</p>`;
+    if (!products || products.error) {
+      resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc((products && products.error) || "Search failed")}</p>`;
       return;
     }
 
-    if (!products || products.length === 0) {
+    if (products.length === 0) {
       resultsDiv.innerHTML = '<p class="empty-state">No products found. Try a different search.</p>';
       return;
     }
@@ -744,9 +754,9 @@ async function doManualSearch() {
 
     window._manualSearchResults = products;
   } catch (err) {
-    resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(err.message)}</p>`;
+    if (seq === manualSearchSeq) resultsDiv.innerHTML = `<p class="empty-state">Error: ${esc(err.message)}</p>`;
   } finally {
-    document.getElementById("btn-manual-search-go").disabled = false;
+    if (seq === manualSearchSeq) document.getElementById("btn-manual-search-go").disabled = false;
   }
 }
 
@@ -765,6 +775,8 @@ async function selectManualProduct(index) {
   showToast("Added " + p.name + " to cart", "success");
 
   // Clear search
+  manualSearchSeq++;
+  document.getElementById("btn-manual-search-go").disabled = false;
   document.getElementById("manual-search-query").value = "";
   document.getElementById("manual-search-results").style.display = "none";
   document.getElementById("manual-search-query").focus();
