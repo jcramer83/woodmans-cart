@@ -3,10 +3,12 @@
   "version": "3.0.0",
   "description": "Docker web app for managing grocery lists and automating ShopWoodmans.com cart via GraphQL",
   "scripts": {
-    "start": "node server-standalone.js"
+    "start": "node server-standalone.js",
+    "test": "node test-shopping.js"
   },
   "dependencies": {
     "express": "^5.2.1",
+    "pdf-lib": "^1.17.1",
     "ws": "^8.19.0"
   }
 }

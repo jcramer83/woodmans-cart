@@ -6,7 +6,7 @@ const { WebSocketServer } = require("ws");
 const path = require("path");
 const fs = require("fs");
 
-const PORT = 3456;
+const PORT = Number(process.env.PORT) || 3456;
 
 function startServer(deps) {
   const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, MANUAL_ITEMS_PATH } = deps;
@@ -15,7 +15,13 @@ function startServer(deps) {
   app.use(express.json());
 
   // Serve renderer/ as static files, and assets/ for favicon etc.
-  app.use(express.static(path.join(__dirname, "renderer")));
+  app.use(express.static(path.join(__dirname, "renderer"), {
+    setHeaders: function (res, filePath) {
+      if (filePath.endsWith(".webmanifest")) {
+        res.setHeader("Content-Type", "application/manifest+json");
+      }
+    },
+  }));
   app.use("/assets", express.static(path.join(__dirname, "assets")));
 
   const server = http.createServer(app);
@@ -528,6 +534,15 @@ function startServer(deps) {
     } catch (err) {
       return res.json({ error: err.message });
     }
+  });
+
+  const { registerShoppingRoutes } = require("./shopping-routes");
+  registerShoppingRoutes(app, {
+    readJSON: readJSON,
+    writeJSON: writeJSON,
+    LAYOUT_PATH: deps.LAYOUT_PATH,
+    ACTIVE_TRIP_PATH: deps.ACTIVE_TRIP_PATH,
+    TRIPS_PATH: deps.TRIPS_PATH,
   });
 
   // Collect local network addresses

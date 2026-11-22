@@ -2,18 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#b71c1c" />
+  <meta name="format-detection" content="telephone=no" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://d2lnr5mha7bycj.cloudfront.net; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* ws://*:3456" />
   <title>Woodmans Cart</title>
   <link rel="icon" type="image/png" href="/assets/icon-new.png" />
   <!-- iOS home screen icon & web app meta -->
-  <link rel="apple-touch-icon" href="/assets/icon-new.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Woodmans" />
+  <meta name="apple-mobile-web-app-title" content="Woodman's" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="shopping.css" />
 </head>
 <body>
   <!-- Header -->
@@ -27,6 +30,8 @@
       <button id="btn-dark-mode" class="btn-icon" onclick="toggleDarkMode()" title="Toggle dark mode">&#9790;</button>
     </div>
   </header>
+
+  <button id="shop-resume" class="shop-resume" type="button" hidden></button>
 
   <!-- Main layout -->
   <main class="main-grid">
@@ -107,6 +112,7 @@
           </div>
         </div>
         <div id="section-online-cart" class="section-collapsible">
+        <button id="btn-shop-instore" class="btn btn-accent shop-launch" type="button">Shop in Store</button>
         <div id="online-cart-activity" class="activity-bar"><div class="activity-bar-fill"></div></div>
         <div id="online-cart-activity-status" class="activity-status"></div>
         <div id="online-cart-list" class="item-list">
@@ -216,7 +222,19 @@
   </div>
 
   <div id="toast-container" class="toast-container"></div>
+
+  <div id="shop-screen" class="shop-screen" hidden>
+    <div class="shop-column">
+      <header id="shop-header" class="shop-header"></header>
+      <div id="shop-scroll" class="shop-scroll"></div>
+      <footer id="shop-footer" class="shop-footer"></footer>
+      <div id="shop-sheet" class="shop-sheet" hidden></div>
+      <div id="shop-toast" class="shop-toast" hidden></div>
+    </div>
+  </div>
+
   <script src="api-adapter.js"></script>
   <script src="app.js"></script>
+  <script src="shopping.js"></script>
 </body>
 </html>

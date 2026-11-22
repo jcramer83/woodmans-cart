@@ -3,3 +3,5 @@ data/
 .git/
 *.md
 test-*.js
+fixtures/
+assets/sample/
