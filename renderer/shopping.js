@@ -15,6 +15,7 @@
   var wakeLock = null;
   var opening = false;
   var shopScrollY = 0;
+  var shopDensity = "compact";
 
   function esc(value) {
     return String(value == null ? "" : value)
@@ -298,11 +299,14 @@
       var total = shopTrip && shopTrip.items ? shopTrip.items.length : 0;
       var done = checkedCount(shopTrip);
       var estimate = shopTrip ? money(tripTotal(shopTrip)) : "";
+      var place = shopDensity === "compact" ? "In-store" : ("In-store · Racine" + (estimate && total ? " · " + estimate : ""));
       header.innerHTML =
         '<div class="shop-header-row">' +
           '<button type="button" class="shop-icon-btn" data-action="close" aria-label="Close shopping">' + icon("close") + "</button>" +
-          '<div class="shop-heading"><div class="shop-kicker">In-store · Racine' + (estimate && total ? " · " + estimate : "") + "</div>" +
+          '<div class="shop-heading"><div class="shop-kicker">' + place + "</div>" +
           '<div class="shop-count" id="shop-count" aria-live="polite"><b>' + done + "</b><span> of " + total + "</span></div></div>" +
+          '<button type="button" class="shop-density" data-action="density" aria-pressed="' + (shopDensity === "compact" ? "true" : "false") + '">' +
+            (shopDensity === "compact" ? "Compact" : "Comfortable") + "</button>" +
           '<div class="shop-timer" id="shop-timer"><span class="shop-dot"></span><span id="shop-elapsed">Ready</span></div>' +
         "</div>" +
         '<div class="shop-bar" aria-hidden="true"><div class="shop-bar-fill" id="shop-bar-fill" style="width:' +
@@ -730,6 +734,7 @@
     var index = target.dataset.index != null ? Number(target.dataset.index) : null;
 
     if (action === "close") return closeScreen();
+    if (action === "density") return toggleDensity();
     if (action === "back") { shopView = "list"; shopSheet = false; return render(); }
     if (action === "toggle") return toggleItem(target.getAttribute("data-id"));
     if (action === "toggle-done") { shopDoneOpen = !shopDoneOpen; return renderFooter(); }
@@ -836,6 +841,27 @@
     if (el.dataset.field === "reverse") section.reverse = !!el.checked;
   }
 
+  function applyDensity() {
+    var screen = screenEl();
+    if (screen) screen.classList.toggle("is-comfortable", shopDensity === "comfortable");
+  }
+
+  function loadDensity() {
+    try {
+      shopDensity = localStorage.getItem("woodmans-shop-density") === "comfortable" ? "comfortable" : "compact";
+    } catch (err) {
+      shopDensity = "compact";
+    }
+    applyDensity();
+  }
+
+  function toggleDensity() {
+    shopDensity = shopDensity === "compact" ? "comfortable" : "compact";
+    try { localStorage.setItem("woodmans-shop-density", shopDensity); } catch (err) {}
+    applyDensity();
+    if (shopView === "list") renderHeader();
+  }
+
   function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").catch(function () {});
@@ -880,6 +906,7 @@
       setTimeout(fitShopScreen, 150);
     });
     setInterval(tickClock, 1000);
+    loadDensity();
     registerServiceWorker();
     syncThemeColor();
     appApi.getActiveTrip().then(async function (data) {
