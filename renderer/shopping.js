@@ -14,6 +14,7 @@
   var toastTimer = null;
   var wakeLock = null;
   var opening = false;
+  var shopScrollY = 0;
 
   function esc(value) {
     return String(value == null ? "" : value)
@@ -147,23 +148,60 @@
 
   function screenEl() { return document.getElementById("shop-screen"); }
 
+  // iOS Safari's layout viewport is taller than the visible screen while the
+  // address bar is up, and a home-screen app draws under the notch. Pin the
+  // overlay to the visual viewport so it is edge to edge in both.
+  function fitShopScreen() {
+    var screen = screenEl();
+    if (!screen || screen.hidden) return;
+    var vv = window.visualViewport;
+    if (!vv) return;
+    screen.style.top = vv.offsetTop + "px";
+    screen.style.left = vv.offsetLeft + "px";
+    screen.style.width = vv.width + "px";
+    screen.style.height = vv.height + "px";
+    screen.style.right = "auto";
+    screen.style.bottom = "auto";
+  }
+
+  function clearShopScreenFit() {
+    var screen = screenEl();
+    if (!screen) return;
+    screen.style.top = "";
+    screen.style.left = "";
+    screen.style.width = "";
+    screen.style.height = "";
+    screen.style.right = "";
+    screen.style.bottom = "";
+  }
+
   function openScreen() {
     var screen = screenEl();
     if (!screen) return;
+    shopScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     screen.hidden = false;
+    document.documentElement.classList.add("shop-open");
     document.body.classList.add("shop-open");
+    document.body.style.top = (-shopScrollY) + "px";
+    fitShopScreen();
     acquireWakeLock();
     render();
     updateResume();
+    syncThemeColor();
   }
 
   function closeScreen() {
     var screen = screenEl();
     if (screen) screen.hidden = true;
+    document.documentElement.classList.remove("shop-open");
     document.body.classList.remove("shop-open");
+    document.body.style.top = "";
+    clearShopScreenFit();
     shopSheet = false;
     releaseWakeLock();
+    window.scrollTo(0, shopScrollY);
     updateResume();
+    syncThemeColor();
   }
 
   function updateResume() {
@@ -805,7 +843,12 @@
 
   function syncThemeColor() {
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", document.body.classList.contains("dark") ? "#121212" : "#b71c1c");
+    if (!meta) return;
+    if (document.body.classList.contains("shop-open")) {
+      meta.setAttribute("content", document.body.classList.contains("dark") ? "#0c0c0d" : "#efece7");
+      return;
+    }
+    meta.setAttribute("content", document.body.classList.contains("dark") ? "#121212" : "#b71c1c");
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -825,8 +868,16 @@
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "visible" && document.body.classList.contains("shop-open")) {
         acquireWakeLock();
+        fitShopScreen();
         tickClock();
       }
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", fitShopScreen);
+      window.visualViewport.addEventListener("scroll", fitShopScreen);
+    }
+    window.addEventListener("orientationchange", function () {
+      setTimeout(fitShopScreen, 150);
     });
     setInterval(tickClock, 1000);
     registerServiceWorker();

@@ -36,7 +36,7 @@ The walk order is the Racine default: Produce, Floral, Bakery, Deli, Cheese, Mea
 
 **PDF** exports the same walk order with a thumbnail, the aisle, the quantity, and a real checkbox on each row. Those checkboxes are AcroForm fields, so a PDF app that supports forms (Adobe Acrobat, PDF Expert) lets you tap them. Other viewers still show the box.
 
-On an iPhone, open the site in Safari, tap Share, then **Add to Home Screen**. The app ships a web manifest and icons, and it asks the screen to stay awake while Shopping Mode is open (Safari 16.4 or newer; Low Power Mode can still dim it). Pinch-zoom is off so a tap does not zoom the list.
+On an iPhone, open the site in Safari, tap Share, then **Add to Home Screen**. The app ships a web manifest and icons, and it asks the screen to stay awake while Shopping Mode is open (Safari 16.4 or newer; Low Power Mode can still dim it). Shopping Mode fills the screen in Safari and as a home-screen app, including under the notch and above the home indicator. Pinch-zoom is off so a tap does not zoom the list.
 
 ## Quick Start
 

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#b71c1c" />
   <meta name="format-detection" content="telephone=no" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://d2lnr5mha7bycj.cloudfront.net; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* ws://*:3456" />
@@ -43,7 +43,7 @@
           <h2>Add Items</h2>
         </div>
         <div id="manual-search-row" class="staple-search-row">
-          <input type="text" inputmode="search" id="manual-search-query" placeholder="Search Woodmans to add to cart..." enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="none" />
+          <input type="text" inputmode="search" id="manual-search-query" placeholder="Search to add an item" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="none" />
           <button id="btn-manual-search-go" class="btn btn-sm btn-accent">&#128269;</button>
         </div>
         <div id="manual-search-results" class="product-results add-items-results" style="display:none;"></div>
@@ -76,11 +76,11 @@
       <!-- Cart section -->
       <section id="cart-section" class="section cart-section">
         <div class="section-header">
-          <h2>Shopping Cart <span id="cart-count" class="badge">0</span> <span id="cart-estimate" class="cart-estimate"></span></h2>
+          <h2>This trip <span id="cart-count" class="badge">0</span> <span id="cart-estimate" class="cart-estimate"></span></h2>
           <button id="btn-clear-cart" class="btn btn-sm">Clear All</button>
         </div>
         <div id="cart-list" class="item-list cart-list">
-          <p class="empty-state">Cart is empty. Use Add Items or Weekly Staples to fill it.</p>
+          <p class="empty-state">Nothing here yet. Search above, or add your weekly staples.</p>
         </div>
       </section>
 
@@ -103,20 +103,20 @@
       <!-- Current Woodmans Online Cart -->
       <section class="section online-cart-section">
         <div class="section-header">
-          <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button> Woodmans Cart <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
-          <div class="section-actions">
-            <button class="btn-icon" onclick="openExternalUrl('https://shopwoodmans.com/store/woodmans-food-markets/storefront')" title="Open Woodmans Store">&#128722;</button>
-            <button id="btn-copy-cart" class="btn btn-sm" title="Copy cart to other shopping mode">Copy Cart</button>
-            <button id="btn-remove-all-online" class="btn btn-sm btn-danger" style="display:none;">Remove All</button>
-            <button id="btn-import-cart" class="btn btn-sm">Refresh</button>
-          </div>
+          <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button> In the store <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
+          <button id="btn-import-cart" class="btn btn-sm" type="button">Refresh</button>
         </div>
         <div id="section-online-cart" class="section-collapsible">
+        <div class="online-tools">
+          <button class="btn btn-sm" type="button" onclick="openExternalUrl('https://shopwoodmans.com/store/woodmans-food-markets/storefront')">Woodman's</button>
+          <button id="btn-copy-cart" class="btn btn-sm" type="button" title="Copy cart to other shopping mode">Copy cart</button>
+          <button id="btn-remove-all-online" class="btn btn-sm btn-danger" type="button" style="display:none;">Remove all</button>
+        </div>
         <button id="btn-shop-instore" class="btn btn-accent shop-launch" type="button">Shop in Store</button>
         <div id="online-cart-activity" class="activity-bar"><div class="activity-bar-fill"></div></div>
         <div id="online-cart-activity-status" class="activity-status"></div>
         <div id="online-cart-list" class="item-list">
-          <p class="empty-state">Click "Refresh" to load your current Woodmans online cart.</p>
+          <p class="empty-state">Refresh to load the in-store cart, then shop.</p>
         </div>
         </div>
       </section>
@@ -218,7 +218,8 @@
       <span class="mcb-icon">&#128722;</span>
       <span class="mcb-text"><strong id="mcb-count">0 items</strong><span id="mcb-est"></span></span>
     </button>
-    <button id="mcb-start" class="btn btn-accent mcb-start" type="button">Add to Woodmans</button>
+    <button id="mcb-shop" class="btn mcb-shop" type="button">Shop</button>
+    <button id="mcb-start" class="btn btn-accent mcb-start" type="button">Add</button>
   </div>
 
   <div id="toast-container" class="toast-container"></div>

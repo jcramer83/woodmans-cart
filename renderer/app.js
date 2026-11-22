@@ -212,6 +212,12 @@ function bindEvents() {
   document.getElementById("mcb-summary").addEventListener("click", () => {
     document.getElementById("cart-section").scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  const mcbShop = document.getElementById("mcb-shop");
+  if (mcbShop) {
+    mcbShop.addEventListener("click", () => {
+      if (window.openShoppingMode) window.openShoppingMode(true);
+    });
+  }
 
   // Modal close buttons
   document.querySelectorAll("[data-close]").forEach((btn) => {
@@ -603,7 +609,7 @@ function renderCart() {
   updateMobileCartBar(items.length, hasEstimate ? total : null);
 
   if (items.length === 0) {
-    list.innerHTML = '<p class="empty-state">Cart is empty. Use Add Items or Weekly Staples to fill it.</p>';
+    list.innerHTML = '<p class="empty-state">Nothing here yet. Search above, or add your weekly staples.</p>';
   } else {
   list.innerHTML = items
     .map(
@@ -636,7 +642,7 @@ function renderCart() {
   if (manualSearchRow) manualSearchRow.style.display = cartRunning ? "none" : "flex";
   const manualResults = document.getElementById("manual-search-results");
   if (manualResults && cartRunning) manualResults.style.display = "none";
-  document.getElementById("btn-clear-cart").style.display = cartRunning ? "none" : "inline-flex";
+  document.getElementById("btn-clear-cart").style.display = (cartRunning || items.length === 0) ? "none" : "inline-flex";
   document.getElementById("btn-add-all-staples").disabled = cartRunning;
 }
 
@@ -708,7 +714,7 @@ function updateMobileCartBar(count, total) {
   document.getElementById("mcb-est").textContent = mcbLast.total != null ? "Est. $" + mcbLast.total.toFixed(2) : "";
   const btn = document.getElementById("mcb-start");
   document.body.classList.toggle("cart-running", cartRunning);
-  btn.textContent = cartRunning ? "Stop" : "Add to Woodmans";
+  btn.textContent = cartRunning ? "Stop" : "Add";
   btn.classList.toggle("btn-danger", cartRunning);
   btn.classList.toggle("btn-accent", !cartRunning);
   btn.disabled = !cartRunning && mcbLast.count === 0;
@@ -795,7 +801,7 @@ function renderOnlineCart(result) {
 
   if (result && result.error) {
     onlineCartItems = [];
-    list.innerHTML = `<p class="empty-state">Error: ${esc(result.error)}</p>`;
+    list.innerHTML = "";
     countEl.textContent = "0";
     estEl.textContent = "";
     removeAllBtn.style.display = "none";
@@ -804,7 +810,7 @@ function renderOnlineCart(result) {
 
   if (!result || !Array.isArray(result) || result.length === 0) {
     onlineCartItems = [];
-    list.innerHTML = '<p class="empty-state">Your Woodmans online cart is empty.</p>';
+    list.innerHTML = '<p class="empty-state">The in-store cart is empty. Add this trip, then refresh.</p>';
     countEl.textContent = "0";
     estEl.textContent = "";
     removeAllBtn.style.display = "none";
@@ -862,7 +868,7 @@ async function removeOnlineCartItem(itemId) {
 async function fetchOnlineCart() {
   const btn = document.getElementById("btn-import-cart");
   btn.disabled = true;
-  btn.textContent = "Loading...";
+  btn.textContent = "Refreshing…";
 
   document.getElementById("online-cart-list").innerHTML = "";
   showActivity("online-cart-activity", "online-cart-activity-status", "Fetching your Woodmans cart... (30-60s)");
