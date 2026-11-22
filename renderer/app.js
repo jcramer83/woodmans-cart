@@ -380,6 +380,55 @@ function restoreCollapsedSections() {
 
 // --- Staples ---
 
+function bundledThumb(name) {
+  var text = String(name || "").toLowerCase().replace(/buttermilk/g, "");
+  var pairs = [
+    ["pancake", "/assets/sample/bread.png"],
+    ["milk", "/assets/sample/milk.png"],
+    ["bread", "/assets/sample/bread.png"],
+    ["banana", "/assets/sample/banana.png"],
+    ["strawber", "/assets/sample/berry.png"],
+    ["berry", "/assets/sample/berry.png"],
+    ["romaine", "/assets/sample/lettuce.png"],
+    ["lettuce", "/assets/sample/lettuce.png"],
+    ["yogurt", "/assets/sample/yogurt.png"],
+    ["butter", "/assets/sample/butter.png"],
+    ["cheddar", "/assets/sample/cheddar.png"],
+    ["cheese", "/assets/sample/cheddar.png"],
+    ["chicken", "/assets/sample/chicken.png"],
+    ["beef", "/assets/sample/beef.png"],
+    ["pizza", "/assets/sample/pizza.png"],
+    ["ice cream", "/assets/sample/icecream.png"],
+    ["cola", "/assets/sample/cola.png"],
+    ["water", "/assets/sample/water.png"],
+    ["chip", "/assets/sample/chips.png"],
+    ["cereal", "/assets/sample/cereal.png"],
+    ["spaghetti", "/assets/sample/pasta.png"],
+    ["pasta", "/assets/sample/pasta.png"],
+    ["oil", "/assets/sample/oil.png"],
+    ["towel", "/assets/sample/towels.png"],
+    ["peanut", "/assets/sample/pb.png"],
+    ["tomato", "/assets/sample/can.png"],
+    ["bagel", "/assets/sample/bagel.png"],
+    ["turkey", "/assets/sample/turkey.png"],
+    ["candle", "/assets/sample/candles.png"],
+    ["bouquet", "/assets/sample/bouquet.png"],
+    ["floral", "/assets/sample/bouquet.png"],
+  ];
+  for (var i = 0; i < pairs.length; i++) {
+    if (text.indexOf(pairs[i][0]) !== -1) return pairs[i][1];
+  }
+  return "";
+}
+
+function thumbHTML(name, image) {
+  var src = image || bundledThumb(name);
+  if (!src) {
+    return '<span class="item-thumb item-thumb-fallback" aria-hidden="true">' + esc((name || "?").slice(0, 1).toUpperCase()) + "</span>";
+  }
+  return '<img class="item-thumb" src="' + esc(src) + '" alt="">';
+}
+
 function renderStaples() {
   const list = document.getElementById("staples-list");
   if (staples.length === 0) {
@@ -391,7 +440,7 @@ function renderStaples() {
     .map(
       (s, i) => `
     <div class="item-row" data-id="${s.id}" draggable="true" ondragstart="dragStartItem(event,'staple',${i})" ondragover="dragOverItem(event)" ondragleave="dragLeaveItem(event)" ondrop="dropItem(event,'staple',${i})" ondragend="dragEndItem(event)">
-      ${s.image ? `<img class="item-thumb" src="${esc(s.image)}" alt="">` : ""}
+      ${thumbHTML(s.productName || s.item, s.image)}
       <div class="item-info">
         <div class="item-name">${esc(s.productName || s.item)}</div>
         <div class="item-detail">${s.price ? esc(s.price) : ""}${s.note ? (s.price ? " - " : "") + esc(s.note) : ""}</div>
@@ -622,7 +671,7 @@ function renderCart() {
           : "";
         return `
     <div class="item-row${rowClass}">
-      ${item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : ""}
+      ${thumbHTML(item.item, item.image)}
       <div class="item-info">
         <div class="item-name">${esc(item.item)}</div>
         <div class="item-detail">${item.note ? esc(item.note) : ""}${item.price ? " - " + esc(item.price) : ""}</div>
@@ -837,7 +886,7 @@ function renderOnlineCart(result) {
     .map(
       (item) => `
     <div class="item-row">
-      ${item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : ""}
+      ${thumbHTML(item.name, item.image)}
       <div class="item-info">
         <div class="item-name">${esc(item.name)}</div>
         ${item.location ? `<div class="item-location">${esc(item.location)}</div>` : ""}
@@ -1228,7 +1277,7 @@ function renderCheckoutPreview(data, body) {
   html += '<div class="checkout-section-value" style="max-height:200px;overflow-y:auto;">';
   for (const item of cartItems) {
     html += '<div class="item-row" style="padding:4px 0;">';
-    if (item.image) html += '<img class="item-thumb" src="' + esc(item.image) + '" alt="" style="width:28px;height:28px;">';
+    html += thumbHTML(item.name || item.item, item.image);
     html += '<div class="item-info"><div class="item-name" style="font-size:13px;">' + esc(item.name || item.item || "") + '</div>';
     html += '<div class="item-detail">' + (item.size ? esc(item.size) + ' - ' : '') + esc(item.price || "") + '</div></div>';
     html += '<span class="item-qty">x' + (item.quantity || 1) + '</span>';

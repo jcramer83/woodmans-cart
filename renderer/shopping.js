@@ -61,9 +61,7 @@
 
   function checkedCount(trip) {
     if (!trip || !trip.items) return 0;
-    return trip.items.filter(function (item) {
-      return item.checked || leaving[item.id];
-    }).length;
+    return trip.items.filter(function (item) { return item.checked; }).length;
   }
 
   function chipText(item) {
@@ -333,14 +331,10 @@
         "<h2>No list yet</h2><p>Refresh the Woodman's cart in In-Store mode, then start here. Aisle labels come from that cart.</p></div>";
       return;
     }
-    var openItems = shopTrip.items.filter(function (item) { return !item.checked; });
     var located = shopTrip.items.some(function (item) { return item.location; });
     var banner = located ? "" :
       '<div class="shop-banner">No aisle labels on this list. Switch to In-Store and refresh the Woodman\'s cart so each item picks up its shelf.</div>';
-    var groups = openItems.length
-      ? groupOpen(openItems)
-      : '<div class="shop-empty"><h2>That\'s the aisle</h2><p>Everything on the list is checked. End the trip when you leave the store.</p></div>';
-    scroll.innerHTML = banner + groups +
+    scroll.innerHTML = banner + groupOpen(shopTrip.items) +
       '<button type="button" class="shop-update" data-action="rebuild">Update from Woodman\'s cart</button>';
     scroll.scrollTop = top;
   }
@@ -535,15 +529,8 @@
         "</div>";
       return;
     }
-    var done = shopTrip ? checkedCount(shopTrip) : 0;
     var started = shopTrip && shopTrip.startedAt;
-    var panelItems = shopTrip ? shopTrip.items.filter(function (item) { return item.checked; }) : [];
     footer.innerHTML =
-      '<button type="button" class="shop-done-toggle" id="shop-done-toggle" data-action="toggle-done"' + (done ? "" : " hidden") + ">" +
-        '<span id="shop-done-count">' + done + " checked</span><span class=\"shop-done-hint\">" + (shopDoneOpen ? "Hide" : "Show") + "</span></button>" +
-      '<div class="shop-done-panel"' + (shopDoneOpen && done ? "" : " hidden") + ">" +
-        panelItems.map(function (item) { return renderRow(item, true); }).join("") +
-      "</div>" +
       '<div class="shop-tools">' +
         '<button type="button" class="shop-tool" data-action="pdf">PDF</button>' +
         '<button type="button" class="shop-tool" data-action="layout">Aisles</button>' +
@@ -595,46 +582,38 @@
     return null;
   }
 
+  var lastToggleAt = Object.create(null);
+  var rowGesture = null;
+
   function toggleItem(id) {
-    if (!shopTrip || leaving[id]) return;
+    if (!shopTrip || !id) return;
+    var now = Date.now();
+    if (lastToggleAt[id] && now - lastToggleAt[id] < 400) return;
+    lastToggleAt[id] = now;
     var item = shopTrip.items.find(function (entry) { return entry.id === id; });
     if (!item) return;
     var next = !item.checked;
-    leaving[id] = true;
+    item.checked = next;
+    item.checkedAt = next ? new Date().toISOString() : null;
     writeLocal(shopTrip.id, id, next);
     if (navigator.vibrate) navigator.vibrate(10);
     var row = findRow(id);
     if (row) {
-      row.classList.add("is-leaving");
       row.classList.toggle("is-checked", next);
       if (next) row.classList.add("just-checked");
+      else row.classList.remove("just-checked");
     }
     paintProgress();
-    leaveCount += 1;
-    var animDone = false;
-    var postOk = null;
-    function finish() {
-      if (!animDone || postOk === null) return;
-      delete leaving[id];
-      leaveCount -= 1;
-      if (postOk) {
-        item.checked = next;
-        item.checkedAt = next ? new Date().toISOString() : null;
-      } else {
-        writeLocal(shopTrip.id, id, !!item.checked);
-        showToast("Couldn't save that check. Try again.");
-      }
-      if (leaveCount <= 0) render();
-      else paintProgress();
-    }
-    setTimeout(function () { animDone = true; finish(); }, 260);
     appApi.setShoppingCheck(id, next).then(function (res) {
-      postOk = !(res && res.error);
+      if (res && res.error) throw new Error(res.error);
       if (res && res.trip) shopTrip.startedAt = shopTrip.startedAt || res.trip.startedAt;
-      finish();
     }).catch(function () {
-      postOk = false;
-      finish();
+      item.checked = !next;
+      item.checkedAt = item.checked ? new Date().toISOString() : null;
+      writeLocal(shopTrip.id, id, item.checked);
+      if (row) row.classList.toggle("is-checked", item.checked);
+      paintProgress();
+      showToast("Couldn't save that check. Try again.");
     });
   }
 
@@ -736,7 +715,15 @@
     if (action === "close") return closeScreen();
     if (action === "density") return toggleDensity();
     if (action === "back") { shopView = "list"; shopSheet = false; return render(); }
-    if (action === "toggle") return toggleItem(target.getAttribute("data-id"));
+    if (action === "toggle") {
+      var rowId = target.getAttribute("data-id");
+      if (rowGesture && rowGesture.id === rowId && rowGesture.moved) {
+        rowGesture = null;
+        return;
+      }
+      rowGesture = null;
+      return toggleItem(rowId);
+    }
     if (action === "toggle-done") { shopDoneOpen = !shopDoneOpen; return renderFooter(); }
     if (action === "pdf") return openPdf();
     if (action === "history") return showHistory();
@@ -883,8 +870,15 @@
       screen.addEventListener("click", onShopClick);
       screen.addEventListener("input", onShopInput);
       screen.addEventListener("change", onShopInput);
-      screen.addEventListener("pointerdown", function () {
+      screen.addEventListener("pointerdown", function (e) {
         if (!wakeLock && document.body.classList.contains("shop-open")) acquireWakeLock();
+        var row = e.target.closest(".shop-row");
+        if (!row) { rowGesture = null; return; }
+        rowGesture = { id: row.getAttribute("data-id"), x: e.clientX, y: e.clientY, moved: false };
+      }, { passive: true });
+      screen.addEventListener("pointermove", function (e) {
+        if (!rowGesture) return;
+        if (Math.abs(e.clientX - rowGesture.x) > 10 || Math.abs(e.clientY - rowGesture.y) > 10) rowGesture.moved = true;
       }, { passive: true });
     }
     var launch = document.getElementById("btn-shop-instore");
@@ -902,8 +896,11 @@
       window.visualViewport.addEventListener("resize", fitShopScreen);
       window.visualViewport.addEventListener("scroll", fitShopScreen);
     }
+    window.addEventListener("resize", fitShopScreen);
     window.addEventListener("orientationchange", function () {
+      fitShopScreen();
       setTimeout(fitShopScreen, 150);
+      setTimeout(fitShopScreen, 450);
     });
     setInterval(tickClock, 1000);
     loadDensity();

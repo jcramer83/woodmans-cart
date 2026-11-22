@@ -312,7 +312,13 @@ body.shop-open .shop-resume {
 
 .shop-row:active { transform: scale(0.985); }
 .shop-row.is-leaving { opacity: 0; transform: translateX(36px) scale(0.98); }
-.shop-row.is-checked .shop-name { color: var(--shop-muted); }
+.shop-row.is-checked .shop-name {
+  color: var(--shop-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+.shop-row.is-checked .shop-photo-wrap,
+.shop-row.is-checked .shop-meta { opacity: 0.45; }
 
 .shop-photo-wrap {
   position: relative;
@@ -888,7 +894,8 @@ body.dark .item-location { color: #ffcdd2; }
   .shop-row.is-checked .shop-check svg { stroke-dashoffset: 0; }
 }
 
-@media (min-width: 800px) {
+/* Phone landscape is wide but short. Only letterbox on a real desktop window. */
+@media (min-width: 900px) and (min-height: 700px) {
   .shop-screen { align-items: stretch; justify-content: center; }
   .shop-column {
     max-width: 480px;
