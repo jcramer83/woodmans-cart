@@ -4,10 +4,15 @@
 const path = require("path");
 const fs = require("fs");
 
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(__dirname, "data");
 const SETTINGS_PATH = path.join(DATA_DIR, "settings.json");
 const STAPLES_PATH = path.join(DATA_DIR, "staples.json");
 const MANUAL_ITEMS_PATH = path.join(DATA_DIR, "manual-items.json");
+const LAYOUT_PATH = path.join(DATA_DIR, "store-layout.json");
+const ACTIVE_TRIP_PATH = path.join(DATA_DIR, "active-trip.json");
+const TRIPS_PATH = path.join(DATA_DIR, "shopping-trips.json");
 
 function ensureDataFiles() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -68,6 +73,9 @@ startServer({
   SETTINGS_PATH,
   STAPLES_PATH,
   MANUAL_ITEMS_PATH,
+  LAYOUT_PATH,
+  ACTIVE_TRIP_PATH,
+  TRIPS_PATH,
 });
 
 console.log("Woodmans Cart standalone server starting...");

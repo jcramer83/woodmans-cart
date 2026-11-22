@@ -10,6 +10,7 @@ let cartItemResults = {}; // { itemId: "ok"|"fail"|"skip" } — tracks per-item 
 let selectedTimeSlot = null; // { day, slot } — currently selected pickup time slot
 let checkoutPreviewData = null; // cached checkout preview response
 let cartOperationActive = false; // true when a cart fetch/remove/add is running (for progress routing)
+let onlineCartItems = [];
 
 // --- Modal helpers ---
 
@@ -330,12 +331,14 @@ function toggleDarkMode() {
   localStorage.setItem("darkMode", isDark ? "1" : "0");
   const btn = document.getElementById("btn-dark-mode");
   if (btn) btn.title = isDark ? "Switch to light mode" : "Switch to dark mode";
+  if (window.syncShopThemeColor) window.syncShopThemeColor();
 }
 
 function initDarkMode() {
   if (localStorage.getItem("darkMode") === "1") {
     document.body.classList.add("dark");
   }
+  if (window.syncShopThemeColor) window.syncShopThemeColor();
 }
 
 // --- Collapsible Sections ---
@@ -791,6 +794,7 @@ function renderOnlineCart(result) {
   const removeAllBtn = document.getElementById("btn-remove-all-online");
 
   if (result && result.error) {
+    onlineCartItems = [];
     list.innerHTML = `<p class="empty-state">Error: ${esc(result.error)}</p>`;
     countEl.textContent = "0";
     estEl.textContent = "";
@@ -799,12 +803,15 @@ function renderOnlineCart(result) {
   }
 
   if (!result || !Array.isArray(result) || result.length === 0) {
+    onlineCartItems = [];
     list.innerHTML = '<p class="empty-state">Your Woodmans online cart is empty.</p>';
     countEl.textContent = "0";
     estEl.textContent = "";
     removeAllBtn.style.display = "none";
     return;
   }
+
+  onlineCartItems = result;
 
   removeAllBtn.style.display = "inline-flex";
 
@@ -827,6 +834,7 @@ function renderOnlineCart(result) {
       ${item.image ? `<img class="item-thumb" src="${esc(item.image)}" alt="">` : ""}
       <div class="item-info">
         <div class="item-name">${esc(item.name)}</div>
+        ${item.location ? `<div class="item-location">${esc(item.location)}</div>` : ""}
         <div class="item-detail">${item.size ? esc(item.size) : ""}${item.price ? " - " + esc(item.price) : ""}</div>
       </div>
       <span class="item-qty">x${item.quantity || 1}</span>
@@ -1568,3 +1576,4 @@ window.selectTimeSlot = selectTimeSlot;
 window.openCheckoutPreview = openCheckoutPreview;
 window.placeOrder = placeOrder;
 window.removeOnlineCartItem = removeOnlineCartItem;
+window.getOnlineCartItems = function () { return onlineCartItems; };

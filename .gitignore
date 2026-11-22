@@ -3,6 +3,10 @@ package-lock.json
 data/settings.json
 data/recipe-images/
 data/manual-items.json
+data/store-layout.json
+data/active-trip.json
+data/shopping-trips.json
+assets/sample/
 *.tar.gz
 *.lnk
 .claude/

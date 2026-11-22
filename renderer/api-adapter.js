@@ -58,7 +58,7 @@
       const res = await fetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body == null ? {} : body),
       });
       return res.json();
     } catch (e) {
@@ -135,6 +135,16 @@
         if (idx !== -1) wsListeners.manualItemsUpdate.splice(idx, 1);
       };
     },
+
+    // In-store shopping list, trip timer, and history
+    getStoreLayout: function () { return apiGet("/api/store-layout"); },
+    saveStoreLayout: function (layout) { return apiPost("/api/store-layout", layout); },
+    prepareShoppingList: function (items) { return apiPost("/api/shopping/prepare", { items: items }); },
+    getActiveTrip: function () { return apiGet("/api/shopping/active"); },
+    startShopping: function () { return apiPost("/api/shopping/start", {}); },
+    setShoppingCheck: function (itemId, checked) { return apiPost("/api/shopping/check", { itemId: itemId, checked: checked }); },
+    endShopping: function () { return apiPost("/api/shopping/end", {}); },
+    getShoppingHistory: function () { return apiGet("/api/shopping/history"); },
 
     // Online cart update listener
     onOnlineCartUpdate: function (callback) {

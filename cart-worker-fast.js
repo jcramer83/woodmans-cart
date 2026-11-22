@@ -329,6 +329,15 @@ function closeFastSession() {
 
 // --- Helper: extract name/price/size from an Items response ---
 
+function readInStoreLocation(item) {
+  const loc = item && item.inStoreItemLocation;
+  if (!loc || typeof loc !== "object") return "";
+  const fromView = loc.viewSection && loc.viewSection.locationString;
+  if (typeof fromView === "string" && fromView.trim()) return fromView.trim();
+  if (typeof loc.locationString === "string" && loc.locationString.trim()) return loc.locationString.trim();
+  return "";
+}
+
 function parseItemDetails(itemsArray) {
   const map = {};
   for (const item of itemsArray) {
@@ -342,7 +351,13 @@ function parseItemDetails(itemsArray) {
     }
     const imgObj = item.viewSection?.itemImage;
     const image = imgObj?.url || "";
-    map[item.id] = { name: item.name || "", price, size: item.size || "", image };
+    map[item.id] = {
+      name: item.name || "",
+      price,
+      size: item.size || "",
+      image,
+      location: readInStoreLocation(item),
+    };
   }
   return map;
 }
@@ -771,6 +786,7 @@ async function fetchCartViaRest(session, progressCallback) {
       price: detail.price || "",
       size: detail.size || "",
       image: detail.image || "",
+      location: detail.location || "",
       quantity: ci.quantity || 1,
     };
   });
@@ -1133,6 +1149,7 @@ module.exports = {
   searchAndAddAll,
   addItemToCart,
   fetchCart,
+  parseItemDetails,
   removeCartItem,
   removeAllCartItems,
   copyCart,
