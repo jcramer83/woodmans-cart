@@ -1953,9 +1953,40 @@ body.dark .product-result-thumb.placeholder { background: #2a2a2a; }
     position: sticky;
     top: 0;
     z-index: 50;
-    padding-top: max(10px, env(safe-area-inset-top));
+    min-height: 128px;
+    align-items: flex-end;
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-bottom: 16px;
     padding-left: max(12px, env(safe-area-inset-left));
     padding-right: max(12px, env(safe-area-inset-right));
+    background:
+      linear-gradient(105deg, rgba(110, 14, 18, 0.94) 0%, rgba(183, 28, 28, 0.78) 48%, rgba(183, 28, 28, 0.28) 100%),
+      url("/assets/hero-groceries.svg") right center / cover no-repeat;
+  }
+  body.dark .app-header {
+    background:
+      linear-gradient(105deg, rgba(8, 8, 10, 0.94) 0%, rgba(18, 18, 20, 0.82) 52%, rgba(18, 18, 20, 0.45) 100%),
+      url("/assets/hero-groceries.svg") right center / cover no-repeat;
+  }
+
+  .item-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    object-fit: cover;
+    background: #f6f1ea;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  }
+  .item-thumb-fallback {
+    display: inline-grid;
+    place-items: center;
+    font-weight: 800;
+    color: #9d1c1c;
+    background: #fdecea;
+  }
+  .item-row {
+    border-radius: 12px;
+    margin-bottom: 4px;
   }
 
   /* One column; flatten the two desktop columns so sections can be reordered */
@@ -2083,6 +2114,12 @@ body.dark .product-result-thumb.placeholder { background: #2a2a2a; }
   .item-row { min-height: 52px; }
   .qty-btn { width: 36px; height: 36px; font-size: 18px; }
   .item-actions button { min-width: 44px; min-height: 44px; }
+
+  .item-row { flex-wrap: wrap; align-items: center; }
+  .item-info { flex: 1 1 calc(100% - 68px); }
+  .item-name { white-space: normal; }
+  .item-qty-controls,
+  .item-actions { margin-left: 60px; }
 
   /* Bottom bar duplicates the main action, so hide the big button */
   .action-section .action-buttons { display: none; }
