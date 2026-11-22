@@ -996,6 +996,8 @@ body.dark .item-row.drag-over {
 .toast.error { background: #c62828; }
 
 /* Cart status line (replaces debug log) */
+.cart-status-line:empty { display: none; }
+
 .cart-status-line {
   font-size: 12px;
   color: #888;
@@ -1935,6 +1937,13 @@ body.dark .product-result-thumb.placeholder { background: #2a2a2a; }
 
 .mobile-cart-bar { display: none; }
 
+.online-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
 @media (max-width: 768px) {
   html, body { max-width: 100%; overflow-x: clip; }
   body { overflow-y: visible; }
@@ -1961,11 +1970,58 @@ body.dark .product-result-thumb.placeholder { background: #2a2a2a; }
 
   .add-items-section       { order: 1; }
   .cart-section            { order: 2; }
-  .action-section          { order: 3; }
-  .staples-section         { order: 4; }
-  #section-timeslots       { order: 5; }
-  .online-cart-section     { order: 6; }
+  .online-cart-section     { order: 3; }
+  .action-section          { order: 4; }
+  .staples-section         { order: 5; }
+  #section-timeslots       { order: 6; }
   .checkout-section        { order: 7; }
+
+  .section-header h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+  .main-grid { gap: 12px; }
+
+  .online-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 8px;
+  }
+  .online-tools .btn { min-height: 40px; }
+
+  /* One resume path: the banner. The in-section button is for starting. */
+  body:has(#shop-resume:not([hidden])) #btn-shop-instore { display: none; }
+
+  .checkout-section {
+    background: transparent;
+    box-shadow: none;
+    padding: 0 2px;
+  }
+  .checkout-section .btn-lg {
+    background: transparent;
+    color: #b71c1c;
+    border: 1px solid rgba(183, 28, 28, 0.35);
+    box-shadow: none;
+    min-height: 48px;
+  }
+  body.dark .checkout-section .btn-lg {
+    color: #ffcdd2;
+    border-color: rgba(229, 57, 53, 0.5);
+    background: transparent;
+  }
+
+  #online-cart-list { max-height: none; }
+
+  .mcb-shop {
+    min-height: 52px;
+    padding: 0 14px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1.5px solid #b71c1c;
+    color: #b71c1c;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .mcb-shop:active { background: #fdecea; }
+  body.dark .mcb-shop { background: transparent; color: #ffcdd2; border-color: #e53935; }
 
   .section { padding: 12px 14px; border-radius: 12px; }
 
