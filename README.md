@@ -26,7 +26,7 @@ After the items are in the Woodman's cart, Shopping Mode is the list you actuall
 
 1. Set the badge in the header to **In-Store**. Aisle labels only come back for that shop. Pickup carts leave the location blank.
 2. Open **Woodmans Cart** and tap **Refresh** so the app reads the live cart, including each item's aisle.
-3. Tap **Shop in Store**. The screen is only the list: photo, aisle, quantity, and a big row you tap to check off.
+3. Tap **Shop in Store**. The screen is only the list: photo, aisle, quantity, and a row you tap to check off. **Compact** fits about twice as many items on a phone; **Comfortable** gives the rows more room. The choice is remembered on that phone.
 4. Tap **Start Shopping** when you walk in. The timer runs until **End Shopping**, which saves the trip.
 5. Checked rows drop into a tray at the bottom. The header shows progress, like **8 of 25**. Closing the screen or locking the phone does not clear those checks. They are stored in `data/active-trip.json`.
 
