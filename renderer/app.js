@@ -213,9 +213,12 @@ function bindEvents() {
       else startCartAutomation();
     });
   }
-  document.getElementById("mcb-summary").addEventListener("click", () => {
-    document.getElementById("cart-section").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  const mcbSummary = document.getElementById("mcb-summary");
+  if (mcbSummary) {
+    mcbSummary.addEventListener("click", () => {
+      document.getElementById("cart-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
   const generateBtn = document.getElementById("btn-shop-instore");
   if (generateBtn) generateBtn.addEventListener("click", generateList);
 
@@ -342,10 +345,17 @@ function toggleDarkMode() {
 }
 
 function initDarkMode() {
-  if (localStorage.getItem("darkMode") === "1") {
-    document.body.classList.add("dark");
-  }
-  if (window.syncShopThemeColor) window.syncShopThemeColor();
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const apply = () => {
+    const choice = localStorage.getItem("darkMode");
+    const dark = choice === "1" || (choice !== "0" && mq.matches);
+    document.body.classList.toggle("dark", dark);
+    const btn = document.getElementById("btn-dark-mode");
+    if (btn) btn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    if (window.syncShopThemeColor) window.syncShopThemeColor();
+  };
+  apply();
+  if (mq.addEventListener) mq.addEventListener("change", apply);
 }
 
 // --- Collapsible Sections ---
@@ -758,11 +768,12 @@ document.addEventListener("DOMContentLoaded", syncHeaderHeight);
 let mcbLast = { count: 0, total: null };
 function updateMobileCartBar(count, total) {
   if (count !== undefined) mcbLast = { count, total };
+  document.body.classList.toggle("cart-running", cartRunning);
   const countEl = document.getElementById("mcb-count");
   if (!countEl) return;
   countEl.textContent = mcbLast.count + (mcbLast.count === 1 ? " item" : " items");
-  document.getElementById("mcb-est").textContent = mcbLast.total != null ? "Est. $" + mcbLast.total.toFixed(2) : "";
-  document.body.classList.toggle("cart-running", cartRunning);
+  const est = document.getElementById("mcb-est");
+  if (est) est.textContent = mcbLast.total != null ? "Est. $" + mcbLast.total.toFixed(2) : "";
   const btn = document.getElementById("mcb-start");
   if (!btn) return;
   btn.textContent = cartRunning ? "Stop" : "Send to Woodman's";
@@ -808,6 +819,7 @@ function syncGenerateList(items) {
 async function generateList() {
   const btn = document.getElementById("btn-shop-instore");
   if (!btn || btn.disabled) return;
+  if (window.revealShoppingList) window.revealShoppingList();
   const mode = (settings && settings.shoppingMode) || "instore";
   btn.disabled = true;
   btn.textContent = "Getting aisles…";

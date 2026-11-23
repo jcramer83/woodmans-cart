@@ -13,9 +13,9 @@
   --shop-ink: #1c1c1e;
   --shop-muted: #6e6e73;
   --shop-line: rgba(28, 28, 30, 0.08);
-  --shop-chip: #fdecea;
-  --shop-chip-ink: #9d1c1c;
-  --shop-accent: #b71c1c;
+  --shop-chip: #e7f3ee;
+  --shop-chip-ink: #0f6e56;
+  --shop-accent: #0f6e56;
   --shop-accent-ink: #ffffff;
   --shop-bar: #e6e1da;
   --shop-shadow: 0 1px 2px rgba(60, 40, 20, 0.04), 0 10px 24px rgba(60, 40, 20, 0.06);
@@ -102,9 +102,9 @@ body.dark .shop-screen {
   --shop-ink: #f5f5f7;
   --shop-muted: #a1a1a6;
   --shop-line: rgba(255, 255, 255, 0.1);
-  --shop-chip: rgba(229, 57, 53, 0.18);
-  --shop-chip-ink: #ffcdd2;
-  --shop-accent: #e53935;
+  --shop-chip: rgba(15, 110, 86, 0.22);
+  --shop-chip-ink: #8fd4bf;
+  --shop-accent: #3dbe9a;
   --shop-bar: #2c2c2e;
   --shop-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.35);
   --shop-good: #7dcea0;
@@ -127,7 +127,7 @@ body.shop-open {
 }
 
 body.shop-open .mobile-cart-bar,
-body.shop-open .shop-resume {
+body.shop-open .shop-resume-wrap {
   display: none !important;
 }
 
@@ -612,7 +612,7 @@ body.dark .shop-check { border-color: #555; }
   cursor: pointer;
 }
 
-.shop-primary.is-end { background: var(--shop-ink); color: var(--shop-column); }
+.shop-primary.is-end { background: var(--shop-accent); color: var(--shop-accent-ink); }
 .shop-primary:disabled { opacity: 0.55; }
 
 .shop-footer-actions {
@@ -846,39 +846,90 @@ body.dark .shop-check { border-color: #555; }
   flex-shrink: 0;
 }
 
+.shop-resume-wrap {
+  position: relative;
+  margin: 12px 16px 0;
+  touch-action: pan-y;
+  will-change: transform;
+}
+.shop-resume-wrap[hidden] { display: none !important; }
+.shop-resume-wrap.is-dragging { touch-action: none; }
+
 .shop-resume {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  width: calc(100% - 20px);
-  margin: 10px auto 0;
-  min-height: 52px;
-  padding: 8px 14px;
-  border: none;
-  border-radius: 14px;
-  background: #b71c1c;
-  color: white;
+  gap: 12px;
+  width: 100%;
+  min-height: 68px;
+  padding: 12px 48px 12px 16px;
+  border: 1px solid rgba(60, 60, 67, 0.1);
+  border-radius: 16px;
+  background: #fff;
+  color: #1c1c1e;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(183, 28, 28, 0.22);
+  box-shadow: 0 1px 2px rgba(28, 28, 30, 0.04), 0 8px 22px rgba(28, 28, 30, 0.06);
 }
-
-.shop-resume[hidden] { display: none !important; }
-.shop-resume strong { font-size: 16px; font-variant-numeric: tabular-nums; }
-.shop-resume-kicker { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85; font-weight: 700; }
-body.dark .shop-resume { background: #e53935; }
+.shop-resume-copy { min-width: 0; }
+.shop-resume strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.shop-resume-kicker {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: #0f6e56;
+}
+.shop-resume-time {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #8e8e93;
+}
+.shop-resume-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(60, 60, 67, 0.08);
+  color: #3a3a3c;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.shop-resume-close:active { background: rgba(60, 60, 67, 0.16); }
+body.dark .shop-resume {
+  background: #2c2c2e;
+  color: #f5f5f7;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .shop-resume-kicker { color: #8fd4bf; }
+body.dark .shop-resume-time { color: #a1a1a6; }
+body.dark .shop-resume-close { background: rgba(255, 255, 255, 0.1); color: #f5f5f7; }
 
 .item-location {
-  color: #9d1c1c;
+  color: #0f6e56;
   font-size: 12px;
   font-weight: 750;
   font-weight: 700;
   margin-top: 2px;
 }
 
-body.dark .item-location { color: #ffcdd2; }
+body.dark .item-location { color: #8fd4bf; }
 
 .shop-screen :focus-visible {
   outline: 3px solid var(--shop-accent);

@@ -203,21 +203,49 @@
     syncThemeColor();
   }
 
+  var LIST_HIDDEN_KEY = "woodmans-list-hidden";
+
+  function listCardHidden() {
+    try { return !!(shopTrip && localStorage.getItem(LIST_HIDDEN_KEY) === shopTrip.id); }
+    catch (e) { return false; }
+  }
+
   function updateResume() {
+    var wrap = document.getElementById("shop-resume-wrap");
     var banner = document.getElementById("shop-resume");
     var active = shopTrip && shopTrip.items && shopTrip.items.length;
-    if (!banner) return;
-    if (!active || document.body.classList.contains("shop-open")) {
-      banner.hidden = true;
+    if (!wrap || !banner) return;
+    if (wrap.classList.contains("is-dragging") || wrap.classList.contains("is-dismissing")) return;
+    if (!active || document.body.classList.contains("shop-open") || listCardHidden()) {
+      wrap.hidden = true;
       return;
     }
     var done = shopTrip.items.filter(function (item) { return item.checked; }).length;
     var time = shopTrip.startedAt
       ? formatClock(Date.now() - new Date(shopTrip.startedAt).getTime())
       : "Ready";
-    banner.hidden = false;
-    banner.innerHTML = '<span><span class="shop-resume-kicker">In-store trip</span><strong>' +
-      done + " of " + shopTrip.items.length + "</strong></span><span>" + esc(time) + "</span>";
+    wrap.hidden = false;
+    banner.innerHTML = '<span class="shop-resume-copy"><span class="shop-resume-kicker">Shopping list</span><strong>' +
+      done + " of " + shopTrip.items.length + "</strong></span><span class=\"shop-resume-time\">" + esc(time) + "</span>";
+  }
+
+  function hideShoppingList() {
+    if (shopTrip && shopTrip.id) {
+      try { localStorage.setItem(LIST_HIDDEN_KEY, shopTrip.id); } catch (e) {}
+    }
+    var wrap = document.getElementById("shop-resume-wrap");
+    if (wrap) {
+      wrap.hidden = true;
+      wrap.classList.remove("is-dismissing");
+      wrap.style.transition = "";
+      wrap.style.transform = "";
+      wrap.style.opacity = "";
+    }
+  }
+
+  function revealShoppingList() {
+    try { localStorage.removeItem(LIST_HIDDEN_KEY); } catch (e) {}
+    updateResume();
   }
 
   function paintProgress() {
@@ -416,7 +444,7 @@
         statCard("This week", current) +
         statCard("Last week", previous) +
       "</div>" + delta +
-      chartCard("Time per week", weeks, "seconds", "#b71c1c", function (week) {
+      chartCard("Time per week", weeks, "seconds", "#0f6e56", function (week) {
         return week.trips ? formatMinutes(week.seconds) : "—";
       }) +
       chartCard("Spend per week", weeks, "spend", "#1b7f4a", function (week) {
@@ -859,7 +887,7 @@
       meta.setAttribute("content", document.body.classList.contains("dark") ? "#0c0c0d" : "#efece7");
       return;
     }
-    meta.setAttribute("content", document.body.classList.contains("dark") ? "#121212" : "#b71c1c");
+    meta.setAttribute("content", document.body.classList.contains("dark") ? "#1c1c1e" : "#f2f2f7");
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -879,8 +907,7 @@
         if (Math.abs(e.clientX - rowGesture.x) > 10 || Math.abs(e.clientY - rowGesture.y) > 10) rowGesture.moved = true;
       }, { passive: true });
     }
-    var banner = document.getElementById("shop-resume");
-    if (banner) banner.addEventListener("click", function () { openShoppingMode(false); });
+    bindResumeCard();
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "visible" && document.body.classList.contains("shop-open")) {
         acquireWakeLock();
@@ -912,4 +939,88 @@
 
   window.openShoppingMode = openShoppingMode;
   window.syncShopThemeColor = syncThemeColor;
+  window.revealShoppingList = revealShoppingList;
+
+  function bindResumeCard() {
+    var wrap = document.getElementById("shop-resume-wrap");
+    var banner = document.getElementById("shop-resume");
+    var closeBtn = document.getElementById("shop-resume-close");
+    if (!wrap || !banner) return;
+    var startX = 0;
+    var startY = 0;
+    var dx = 0;
+    var dragging = false;
+    var axis = "";
+    var suppressClick = false;
+
+    banner.addEventListener("click", function (e) {
+      if (suppressClick) { suppressClick = false; e.preventDefault(); return; }
+      openShoppingMode(false);
+    });
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dismissResume(0);
+      });
+    }
+    wrap.addEventListener("pointerdown", function (e) {
+      if (e.target.closest(".shop-resume-close")) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      dx = 0;
+      dragging = true;
+      axis = "";
+      if (wrap.setPointerCapture) {
+        try { wrap.setPointerCapture(e.pointerId); } catch (err) {}
+      }
+    });
+    wrap.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      var x = e.clientX - startX;
+      var y = e.clientY - startY;
+      if (!axis) {
+        if (Math.abs(x) < 8 && Math.abs(y) < 8) return;
+        axis = Math.abs(x) > Math.abs(y) ? "x" : "y";
+        if (axis === "y") {
+          dragging = false;
+          return;
+        }
+        wrap.classList.add("is-dragging");
+      }
+      if (axis !== "x") return;
+      dx = x;
+      wrap.style.transform = "translateX(" + dx + "px)";
+      wrap.style.opacity = String(Math.max(0.4, 1 - Math.abs(dx) / 260));
+    });
+    function finish() {
+      if (!dragging && axis !== "x") return;
+      var moved = Math.abs(dx);
+      dragging = false;
+      wrap.classList.remove("is-dragging");
+      if (axis === "x" && moved > 72) {
+        suppressClick = true;
+        dismissResume(dx);
+      } else if (axis === "x") {
+        if (moved > 8) suppressClick = true;
+        wrap.style.transition = "transform 0.28s cubic-bezier(.2,.85,.2,1), opacity 0.28s ease";
+        wrap.style.transform = "";
+        wrap.style.opacity = "";
+        setTimeout(function () { wrap.style.transition = ""; }, 300);
+      }
+      dx = 0;
+      axis = "";
+    }
+    wrap.addEventListener("pointerup", finish);
+    wrap.addEventListener("pointercancel", finish);
+
+    function dismissResume(delta) {
+      var dir = delta >= 0 ? 1 : -1;
+      wrap.classList.add("is-dismissing");
+      wrap.style.transition = "transform 0.32s cubic-bezier(.2,.85,.2,1), opacity 0.28s ease";
+      wrap.style.transform = "translateX(" + (dir * Math.max(wrap.offsetWidth, 280)) + "px)";
+      wrap.style.opacity = "0";
+      setTimeout(hideShoppingList, 300);
+    }
+  }
 })();
