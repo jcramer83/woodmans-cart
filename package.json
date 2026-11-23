@@ -4,7 +4,7 @@
   "description": "Docker web app for managing grocery lists and automating ShopWoodmans.com cart via GraphQL",
   "scripts": {
     "start": "node server-standalone.js",
-    "test": "node test-shopping.js"
+    "test": "node test-shopping.js && node test-cart-sent.js"
   },
   "dependencies": {
     "express": "^5.2.1",

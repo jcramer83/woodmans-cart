@@ -155,6 +155,10 @@ async function init() {
   updateTimeSlotsVisibility();
   syncGenerateList();
   bindEvents();
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") syncGenerateList();
+  });
+  window.addEventListener("pageshow", function () { syncGenerateList(); });
 
   // Auto-fetch online cart and time slots on load
   fetchOnlineCart();
@@ -798,8 +802,7 @@ function syncGenerateList(items) {
   if (!btn) return;
   const mode = (settings && settings.shoppingMode) || "instore";
   if (Array.isArray(items)) {
-    if (items.some((item) => item && item.location)) rememberCartSent(true);
-    else rememberCartSent(false);
+    rememberCartSent(nextCartSent(cartWasSent(), items));
   }
   const instore = mode === "instore";
   const ready = instore && cartWasSent();
@@ -1505,9 +1508,10 @@ async function startCartAutomation() {
     renderCart();
   });
 
+  let started = null;
   try {
     try {
-      await appApi.startCart({ items: cartItems, settings });
+      started = await appApi.startCart({ items: cartItems, settings });
     } catch (err) {
       appendLog(`Error: ${err.message}`);
     }
@@ -1515,25 +1519,36 @@ async function startCartAutomation() {
     removeItemDoneListener();
     progressBar.style.display = "none";
 
-    // Summary
-    const okCount = Object.values(cartItemResults).filter((s) => s === "ok").length;
-    const failCount = Object.values(cartItemResults).filter((s) => s === "fail").length;
-    const skipCount = Object.values(cartItemResults).filter((s) => s === "skip").length;
+    // The HTTP result is the source of truth. Item events can arrive late
+    // on a phone that was backgrounded, so don't wait on them to enable the list.
+    const httpOk = started && typeof started.ok === "number" ? started.ok : 0;
+    const okCount = Math.max(
+      Object.values(cartItemResults).filter((s) => s === "ok").length,
+      httpOk
+    );
+    const failCount = Math.max(
+      Object.values(cartItemResults).filter((s) => s === "fail").length,
+      started && typeof started.failed === "number" ? started.failed : 0
+    );
+    const skipCount = Math.max(
+      Object.values(cartItemResults).filter((s) => s === "skip").length,
+      started && typeof started.skipped === "number" ? started.skipped : 0
+    );
     const summaryLine = document.getElementById("cart-status-line");
     if (summaryLine) {
       if (failCount > 0) {
         summaryLine.textContent = "Done — " + okCount + " added, " + failCount + " failed, " + skipCount + " skipped";
         summaryLine.className = "cart-status-line error";
         showToast(failCount + " items failed to add", "error");
-      } else {
+      } else if (okCount > 0 || (started && !started.error)) {
         summaryLine.textContent = "Done — " + okCount + " added" + (skipCount > 0 ? ", " + skipCount + " skipped" : "");
         summaryLine.className = "cart-status-line success";
         showToast("Sent " + okCount + " items to Woodman's", "success");
       }
-      if (okCount > 0 && (settings.shoppingMode || "instore") === "instore") {
-        rememberCartSent(true);
-        syncGenerateList();
-      }
+    }
+    if (okCount > 0 && (settings.shoppingMode || "instore") === "instore") {
+      rememberCartSent(true);
+      syncGenerateList();
     }
 
   } finally {
