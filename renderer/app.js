@@ -155,10 +155,14 @@ async function init() {
   updateTimeSlotsVisibility();
   bindEvents();
 
-  // Auto-fetch online cart and time slots on load
-  fetchOnlineCart();
-  if ((settings.shoppingMode || "instore") === "pickup") {
-    fetchTimeSlots();
+  // Layout previews are mockups. Don't read or write the Woodman's cart for them.
+  var layoutPreview = new URLSearchParams(location.search).get("layout");
+  var isLayoutPreview = layoutPreview === "a" || layoutPreview === "b" || layoutPreview === "c";
+  if (!isLayoutPreview) {
+    fetchOnlineCart();
+    if ((settings.shoppingMode || "instore") === "pickup") {
+      fetchTimeSlots();
+    }
   }
 
   // Listen for online cart updates pushed after automation completes

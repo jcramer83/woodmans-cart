@@ -910,7 +910,9 @@
       shopTrip = data && data.trip;
       if (shopTrip) await reconcile(shopTrip);
       updateResume();
-      if (shopTrip && shopTrip.startedAt) openScreen();
+      var preview = new URLSearchParams(location.search).get("layout");
+      var showingPreview = preview === "a" || preview === "b" || preview === "c";
+      if (shopTrip && shopTrip.startedAt && !showingPreview) openScreen();
     }).catch(function () {});
   });
 
