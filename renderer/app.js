@@ -213,9 +213,12 @@ function bindEvents() {
       else startCartAutomation();
     });
   }
-  document.getElementById("mcb-summary").addEventListener("click", () => {
-    document.getElementById("cart-section").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  const mcbSummary = document.getElementById("mcb-summary");
+  if (mcbSummary) {
+    mcbSummary.addEventListener("click", () => {
+      document.getElementById("cart-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
   const generateBtn = document.getElementById("btn-shop-instore");
   if (generateBtn) generateBtn.addEventListener("click", generateList);
 
@@ -342,10 +345,17 @@ function toggleDarkMode() {
 }
 
 function initDarkMode() {
-  if (localStorage.getItem("darkMode") === "1") {
-    document.body.classList.add("dark");
-  }
-  if (window.syncShopThemeColor) window.syncShopThemeColor();
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const apply = () => {
+    const choice = localStorage.getItem("darkMode");
+    const dark = choice === "1" || (choice !== "0" && mq.matches);
+    document.body.classList.toggle("dark", dark);
+    const btn = document.getElementById("btn-dark-mode");
+    if (btn) btn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    if (window.syncShopThemeColor) window.syncShopThemeColor();
+  };
+  apply();
+  if (mq.addEventListener) mq.addEventListener("change", apply);
 }
 
 // --- Collapsible Sections ---
@@ -384,42 +394,39 @@ function restoreCollapsedSections() {
 function bundledThumb(name) {
   var text = String(name || "").toLowerCase().replace(/buttermilk/g, "");
   var pairs = [
-    ["pancake", "/assets/sample/bread.png"],
-    ["milk", "/assets/sample/milk.png"],
-    ["bread", "/assets/sample/bread.png"],
-    ["banana", "/assets/sample/banana.png"],
-    ["strawber", "/assets/sample/berry.png"],
-    ["berry", "/assets/sample/berry.png"],
-    ["romaine", "/assets/sample/lettuce.png"],
-    ["lettuce", "/assets/sample/lettuce.png"],
-    ["yogurt", "/assets/sample/yogurt.png"],
-    ["butter", "/assets/sample/butter.png"],
-    ["cheddar", "/assets/sample/cheddar.png"],
-    ["cheese", "/assets/sample/cheddar.png"],
-    ["chicken", "/assets/sample/chicken.png"],
-    ["beef", "/assets/sample/beef.png"],
-    ["pizza", "/assets/sample/pizza.png"],
-    ["ice cream", "/assets/sample/icecream.png"],
-    ["cola", "/assets/sample/cola.png"],
-    ["water", "/assets/sample/water.png"],
-    ["chip", "/assets/sample/chips.png"],
-    ["cereal", "/assets/sample/cereal.png"],
-    ["spaghetti", "/assets/sample/pasta.png"],
-    ["pasta", "/assets/sample/pasta.png"],
-    ["oil", "/assets/sample/oil.png"],
-    ["towel", "/assets/sample/towels.png"],
-    ["peanut", "/assets/sample/pb.png"],
-    ["tomato", "/assets/sample/can.png"],
-    ["bagel", "/assets/sample/bagel.png"],
-    ["turkey", "/assets/sample/turkey.png"],
-    ["candle", "/assets/sample/candles.png"],
-    ["bouquet", "/assets/sample/bouquet.png"],
-    ["floral", "/assets/sample/bouquet.png"],
+    ["pancake", "/assets/art/pancake.svg"],
+    ["milk", "/assets/art/milk.svg"],
+    ["bread", "/assets/art/bread.svg"],
+    ["banana", "/assets/art/banana.svg"],
+    ["strawber", "/assets/art/berry.svg"],
+    ["berry", "/assets/art/berry.svg"],
+    ["romaine", "/assets/art/lettuce.svg"],
+    ["lettuce", "/assets/art/lettuce.svg"],
+    ["yogurt", "/assets/art/yogurt.svg"],
+    ["butter", "/assets/art/butter.svg"],
+    ["cheddar", "/assets/art/cheese.svg"],
+    ["cheese", "/assets/art/cheese.svg"],
+    ["chicken", "/assets/art/chicken.svg"],
+    ["beef", "/assets/art/beef.svg"],
+    ["pizza", "/assets/art/pizza.svg"],
+    ["ice cream", "/assets/art/icecream.svg"],
+    ["cola", "/assets/art/cola.svg"],
+    ["water", "/assets/art/water.svg"],
+    ["chip", "/assets/art/chips.svg"],
+    ["cereal", "/assets/art/cereal.svg"],
+    ["spaghetti", "/assets/art/pasta.svg"],
+    ["pasta", "/assets/art/pasta.svg"],
+    ["oil", "/assets/art/oil.svg"],
+    ["bagel", "/assets/art/bagel.svg"],
+    ["turkey", "/assets/art/turkey.svg"],
+    ["bouquet", "/assets/art/bouquet.svg"],
+    ["floral", "/assets/art/bouquet.svg"],
+    ["flower", "/assets/art/bouquet.svg"],
   ];
   for (var i = 0; i < pairs.length; i++) {
     if (text.indexOf(pairs[i][0]) !== -1) return pairs[i][1];
   }
-  return "";
+  return text ? "/assets/art/bag.svg" : "";
 }
 
 function thumbHTML(name, image) {
@@ -433,7 +440,7 @@ function thumbHTML(name, image) {
 function renderStaples() {
   const list = document.getElementById("staples-list");
   if (staples.length === 0) {
-    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/empty-staples.png" alt="" />No staples yet. Search below to add items.</p>';
+    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/art/empty-staples.svg" alt="" />No staples yet. Search below to add items.</p>';
     return;
   }
 
@@ -659,7 +666,7 @@ function renderCart() {
   updateMobileCartBar(items.length, hasEstimate ? total : null);
 
   if (items.length === 0) {
-    list.innerHTML = '<p class="empty-state">Nothing here yet. Search above, or add your weekly staples.</p>';
+    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/art/empty-trip.svg" alt="" />Nothing here yet. Search above, or add your weekly staples.</p>';
   } else {
   list.innerHTML = items
     .map(
@@ -758,11 +765,12 @@ document.addEventListener("DOMContentLoaded", syncHeaderHeight);
 let mcbLast = { count: 0, total: null };
 function updateMobileCartBar(count, total) {
   if (count !== undefined) mcbLast = { count, total };
+  document.body.classList.toggle("cart-running", cartRunning);
   const countEl = document.getElementById("mcb-count");
   if (!countEl) return;
   countEl.textContent = mcbLast.count + (mcbLast.count === 1 ? " item" : " items");
-  document.getElementById("mcb-est").textContent = mcbLast.total != null ? "Est. $" + mcbLast.total.toFixed(2) : "";
-  document.body.classList.toggle("cart-running", cartRunning);
+  const est = document.getElementById("mcb-est");
+  if (est) est.textContent = mcbLast.total != null ? "Est. $" + mcbLast.total.toFixed(2) : "";
   const btn = document.getElementById("mcb-start");
   if (!btn) return;
   btn.textContent = cartRunning ? "Stop" : "Send to Woodman's";
@@ -808,6 +816,7 @@ function syncGenerateList(items) {
 async function generateList() {
   const btn = document.getElementById("btn-shop-instore");
   if (!btn || btn.disabled) return;
+  if (window.revealShoppingList) window.revealShoppingList();
   const mode = (settings && settings.shoppingMode) || "instore";
   btn.disabled = true;
   btn.textContent = "Getting aisles…";
@@ -928,7 +937,7 @@ function renderOnlineCart(result) {
 
   if (!result || !Array.isArray(result) || result.length === 0) {
     onlineCartItems = [];
-    list.innerHTML = '<p class="empty-state">The in-store cart is empty. Send this trip to Woodman\'s first.</p>';
+    list.innerHTML = '<p class="empty-state"><img class="empty-state-img" src="/assets/art/empty-store.svg" alt="" />The in-store cart is empty. Send this trip to Woodman\'s first.</p>';
     countEl.textContent = "0";
     estEl.textContent = "";
     removeAllBtn.style.display = "none";
@@ -1704,6 +1713,7 @@ window.executeCopyCart = executeCopyCart;
 window.fetchTimeSlots = fetchTimeSlots;
 window.selectTimeSlot = selectTimeSlot;
 window.syncGenerateList = syncGenerateList;
+window.bundledThumb = bundledThumb;
 window.generateList = generateList;
 window.removeOnlineCartItem = removeOnlineCartItem;
 window.getOnlineCartItems = function () { return onlineCartItems; };

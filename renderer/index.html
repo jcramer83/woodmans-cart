@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-  <meta name="theme-color" content="#b71c1c" />
+  <meta name="theme-color" content="#f2f2f7" />
   <meta name="format-detection" content="telephone=no" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://d2lnr5mha7bycj.cloudfront.net; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* ws://*:3456" />
   <title>Woodmans Cart</title>
@@ -31,7 +31,10 @@
     </div>
   </header>
 
-  <button id="shop-resume" class="shop-resume" type="button" hidden></button>
+  <div id="shop-resume-wrap" class="shop-resume-wrap" hidden>
+    <button id="shop-resume" class="shop-resume" type="button"></button>
+    <button id="shop-resume-close" class="shop-resume-close" type="button" aria-label="Hide shopping list">&times;</button>
+  </div>
 
   <!-- Main layout -->
   <main class="main-grid">
@@ -40,7 +43,7 @@
       <!-- Add items (top) -->
       <section class="section add-items-section">
         <div class="section-header">
-          <h2>Add Items</h2>
+          <h2><img class="section-mark" src="/assets/art/mark-trip.svg" alt="">Add Items</h2>
         </div>
         <div id="manual-search-row" class="staple-search-row">
           <input type="text" inputmode="search" id="manual-search-query" placeholder="Search to add an item" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="none" />
@@ -52,14 +55,14 @@
       <!-- Staples section -->
       <section class="section staples-section">
         <div class="section-header">
-          <h2 class="section-toggle" onclick="if(event.target===this)toggleSection('staples')"><button class="collapse-btn" onclick="toggleSection('staples')" title="Expand/collapse">&#9660;</button> Weekly Staples</h2>
+          <h2 class="section-toggle" onclick="if(event.target===this)toggleSection('staples')"><button class="collapse-btn" onclick="toggleSection('staples')" title="Expand/collapse">&#9660;</button><img class="section-mark" src="/assets/art/mark-staples.svg" alt="">Weekly Staples</h2>
           <div class="section-actions">
             <button id="btn-add-all-staples" class="btn btn-sm">Add All to Cart</button>
           </div>
         </div>
         <div id="section-staples" class="section-collapsible">
         <div id="staples-list" class="item-list">
-          <p class="empty-state">No staples yet. Search below to add items.</p>
+          <p class="empty-state"><img class="empty-state-img" src="/assets/art/empty-staples.svg" alt="">No staples yet. Search below to add items.</p>
         </div>
         <div id="staple-search-row" class="staple-search-row">
           <input type="text" id="staple-search-query" placeholder="Search Woodmans to add..." />
@@ -76,7 +79,7 @@
       <!-- Cart section -->
       <section id="cart-section" class="section cart-section">
         <div class="section-header">
-          <h2>This trip <span id="cart-count" class="badge">0</span> <span id="cart-estimate" class="cart-estimate"></span></h2>
+          <h2><img class="section-mark" src="/assets/art/mark-trip.svg" alt="">This trip <span id="cart-count" class="badge">0</span> <span id="cart-estimate" class="cart-estimate"></span></h2>
           <div class="trip-actions">
             <button id="btn-clear-cart" class="btn btn-sm" type="button">Clear</button>
             <button id="btn-start-cart" class="btn btn-accent" type="button">Send to Woodman's</button>
@@ -84,7 +87,7 @@
           </div>
         </div>
         <div id="cart-list" class="item-list cart-list">
-          <p class="empty-state">Nothing here yet. Search above, or add your weekly staples.</p>
+          <p class="empty-state"><img class="empty-state-img" src="/assets/art/empty-trip.svg" alt="">Nothing here yet. Search above, or add your weekly staples.</p>
         </div>
       </section>
 
@@ -103,7 +106,7 @@
       <!-- Current Woodmans Online Cart -->
       <section class="section online-cart-section">
         <div class="section-header">
-          <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button> In the store <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
+          <h2><button class="collapse-btn" onclick="toggleSection('online-cart')" title="Collapse">&#9660;</button><img class="section-mark" src="/assets/art/mark-store.svg" alt="">In the store <span id="online-cart-count" class="badge">0</span> <span id="online-cart-estimate" class="cart-estimate"></span></h2>
           <button id="btn-import-cart" class="btn btn-sm" type="button">Refresh</button>
         </div>
         <div id="section-online-cart" class="section-collapsible">
@@ -117,7 +120,7 @@
         <div id="online-cart-activity" class="activity-bar"><div class="activity-bar-fill"></div></div>
         <div id="online-cart-activity-status" class="activity-status"></div>
         <div id="online-cart-list" class="item-list">
-          <p class="empty-state">Send this trip to Woodman's, then generate the aisle list.</p>
+          <p class="empty-state"><img class="empty-state-img" src="/assets/art/empty-store.svg" alt="">Send this trip to Woodman's, then generate the aisle list.</p>
         </div>
         </div>
       </section>
@@ -188,14 +191,6 @@
         <button id="btn-copy-cart-confirm" class="btn btn-accent">Copy Cart</button>
       </div>
     </div>
-  </div>
-
-  <!-- Mobile cart bar (phones only) -->
-  <div id="mobile-cart-bar" class="mobile-cart-bar">
-    <button id="mcb-summary" class="mcb-summary" type="button" title="Show cart">
-      <span class="mcb-icon">&#128722;</span>
-      <span class="mcb-text"><strong id="mcb-count">0 items</strong><span id="mcb-est"></span></span>
-    </button>
   </div>
 
   <div id="toast-container" class="toast-container"></div>
