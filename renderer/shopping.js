@@ -205,9 +205,7 @@
 
   function updateResume() {
     var banner = document.getElementById("shop-resume");
-    var launch = document.getElementById("btn-shop-instore");
     var active = shopTrip && shopTrip.items && shopTrip.items.length;
-    if (launch) launch.textContent = active ? "Resume Shopping" : "Shop in Store";
     if (!banner) return;
     if (!active || document.body.classList.contains("shop-open")) {
       banner.hidden = true;
@@ -639,7 +637,7 @@
       showToast(err.message || "Couldn't open the shopping list");
     } finally {
       opening = false;
-      if (launch) launch.disabled = false;
+      if (window.syncGenerateList) window.syncGenerateList();
       updateResume();
     }
   }
@@ -881,8 +879,6 @@
         if (Math.abs(e.clientX - rowGesture.x) > 10 || Math.abs(e.clientY - rowGesture.y) > 10) rowGesture.moved = true;
       }, { passive: true });
     }
-    var launch = document.getElementById("btn-shop-instore");
-    if (launch) launch.addEventListener("click", function () { openShoppingMode(true); });
     var banner = document.getElementById("shop-resume");
     if (banner) banner.addEventListener("click", function () { openShoppingMode(false); });
     document.addEventListener("visibilitychange", function () {

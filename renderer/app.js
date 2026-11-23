@@ -153,6 +153,7 @@ async function init() {
   renderCart();
   updateModeBadge();
   updateTimeSlotsVisibility();
+  syncGenerateList();
   bindEvents();
 
   // Auto-fetch online cart and time slots on load
@@ -205,19 +206,18 @@ function bindEvents() {
   document.getElementById("btn-stop-cart").addEventListener("click", stopCartAutomation);
 
   // Mobile cart bar
-  document.getElementById("mcb-start").addEventListener("click", () => {
-    if (cartRunning) stopCartAutomation();
-    else startCartAutomation();
-  });
+  const mcbStart = document.getElementById("mcb-start");
+  if (mcbStart) {
+    mcbStart.addEventListener("click", () => {
+      if (cartRunning) stopCartAutomation();
+      else startCartAutomation();
+    });
+  }
   document.getElementById("mcb-summary").addEventListener("click", () => {
     document.getElementById("cart-section").scrollIntoView({ behavior: "smooth", block: "start" });
   });
-  const mcbShop = document.getElementById("mcb-shop");
-  if (mcbShop) {
-    mcbShop.addEventListener("click", () => {
-      if (window.openShoppingMode) window.openShoppingMode(true);
-    });
-  }
+  const generateBtn = document.getElementById("btn-shop-instore");
+  if (generateBtn) generateBtn.addEventListener("click", generateList);
 
   // Modal close buttons
   document.querySelectorAll("[data-close]").forEach((btn) => {
@@ -322,6 +322,7 @@ async function toggleShoppingMode() {
   await appApi.saveSettings(settings);
   updateModeBadge();
   updateTimeSlotsVisibility();
+  syncGenerateList();
   // Refresh online cart for new mode
   fetchOnlineCart();
   // Auto-fetch time slots when switching to pickup
@@ -761,12 +762,79 @@ function updateMobileCartBar(count, total) {
   if (!countEl) return;
   countEl.textContent = mcbLast.count + (mcbLast.count === 1 ? " item" : " items");
   document.getElementById("mcb-est").textContent = mcbLast.total != null ? "Est. $" + mcbLast.total.toFixed(2) : "";
-  const btn = document.getElementById("mcb-start");
   document.body.classList.toggle("cart-running", cartRunning);
-  btn.textContent = cartRunning ? "Stop" : "Add";
+  const btn = document.getElementById("mcb-start");
+  if (!btn) return;
+  btn.textContent = cartRunning ? "Stop" : "Send to Woodman's";
   btn.classList.toggle("btn-danger", cartRunning);
   btn.classList.toggle("btn-accent", !cartRunning);
   btn.disabled = !cartRunning && mcbLast.count === 0;
+}
+
+const CART_SENT_KEY = "woodmans-cart-sent";
+
+function rememberCartSent(sent) {
+  try {
+    if (sent) localStorage.setItem(CART_SENT_KEY, "1");
+    else localStorage.removeItem(CART_SENT_KEY);
+  } catch (e) {}
+}
+
+function cartWasSent() {
+  try { return localStorage.getItem(CART_SENT_KEY) === "1"; } catch (e) { return false; }
+}
+
+function syncGenerateList(items) {
+  const btn = document.getElementById("btn-shop-instore");
+  const hint = document.getElementById("generate-hint");
+  if (!btn) return;
+  const mode = (settings && settings.shoppingMode) || "instore";
+  if (Array.isArray(items)) {
+    if (items.some((item) => item && item.location)) rememberCartSent(true);
+    else rememberCartSent(false);
+  }
+  const instore = mode === "instore";
+  const ready = instore && cartWasSent();
+  btn.disabled = !ready;
+  if (btn.textContent !== "Getting aisles…") btn.textContent = "Generate list";
+  if (hint) {
+    hint.hidden = ready;
+    hint.textContent = instore
+      ? "Send to Woodman's first to get aisle numbers."
+      : "Switch to In-Store to make an aisle list.";
+  }
+}
+
+async function generateList() {
+  const btn = document.getElementById("btn-shop-instore");
+  if (!btn || btn.disabled) return;
+  const mode = (settings && settings.shoppingMode) || "instore";
+  btn.disabled = true;
+  btn.textContent = "Getting aisles…";
+  try {
+    const result = await appApi.fetchCurrentCart(mode);
+    if (result && !result.error && Array.isArray(result)) {
+      renderOnlineCart(result);
+      if (!result.some((item) => item && item.location)) {
+        showToast("No aisle numbers on this cart yet.", "error");
+        return;
+      }
+      await appApi.prepareShoppingList(result);
+      if (window.openShoppingMode) await window.openShoppingMode(false);
+      return;
+    }
+    const cached = (typeof onlineCartItems !== "undefined" && Array.isArray(onlineCartItems)) ? onlineCartItems : [];
+    if (cached.some((item) => item && item.location)) {
+      await appApi.prepareShoppingList(cached);
+      if (window.openShoppingMode) await window.openShoppingMode(false);
+      return;
+    }
+    showToast((result && result.error) || "Couldn't read the Woodman's cart", "error");
+  } catch (err) {
+    showToast(err.message || "Couldn't generate the list", "error");
+  } finally {
+    syncGenerateList();
+  }
 }
 
 // --- Manual item product search (same pattern as staples) ---
@@ -854,19 +922,22 @@ function renderOnlineCart(result) {
     countEl.textContent = "0";
     estEl.textContent = "";
     removeAllBtn.style.display = "none";
+    syncGenerateList();
     return;
   }
 
   if (!result || !Array.isArray(result) || result.length === 0) {
     onlineCartItems = [];
-    list.innerHTML = '<p class="empty-state">The in-store cart is empty. Add this trip, then refresh.</p>';
+    list.innerHTML = '<p class="empty-state">The in-store cart is empty. Send this trip to Woodman\'s first.</p>';
     countEl.textContent = "0";
     estEl.textContent = "";
     removeAllBtn.style.display = "none";
+    syncGenerateList(Array.isArray(result) ? result : []);
     return;
   }
 
   onlineCartItems = result;
+  syncGenerateList(result);
 
   removeAllBtn.style.display = "inline-flex";
 
@@ -1448,7 +1519,11 @@ async function startCartAutomation() {
       } else {
         summaryLine.textContent = "Done — " + okCount + " added" + (skipCount > 0 ? ", " + skipCount + " skipped" : "");
         summaryLine.className = "cart-status-line success";
-        showToast("All " + okCount + " items added!", "success");
+        showToast("Sent " + okCount + " items to Woodman's", "success");
+      }
+      if (okCount > 0 && (settings.shoppingMode || "instore") === "instore") {
+        rememberCartSent(true);
+        syncGenerateList();
       }
     }
 
@@ -1628,7 +1703,7 @@ window.openCopyCartModal = openCopyCartModal;
 window.executeCopyCart = executeCopyCart;
 window.fetchTimeSlots = fetchTimeSlots;
 window.selectTimeSlot = selectTimeSlot;
-window.openCheckoutPreview = openCheckoutPreview;
-window.placeOrder = placeOrder;
+window.syncGenerateList = syncGenerateList;
+window.generateList = generateList;
 window.removeOnlineCartItem = removeOnlineCartItem;
 window.getOnlineCartItems = function () { return onlineCartItems; };

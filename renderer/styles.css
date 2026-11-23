@@ -1944,6 +1944,20 @@ body.dark .product-result-thumb.placeholder { background: #2a2a2a; }
   margin: 0 0 8px;
 }
 
+.trip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.generate-hint { margin: 0 0 8px; color: #6e6e73; font-size: 14px; }
+.generate-hint[hidden] { display: none !important; }
+
+body:not(.cart-running) .action-section:not(:has(.activity-status:not(:empty))) {
+  display: none;
+}
+
 @media (max-width: 768px) {
   html, body { max-width: 100%; overflow-x: clip; }
   body { overflow-y: visible; }
@@ -2018,8 +2032,22 @@ body.dark .product-result-thumb.placeholder { background: #2a2a2a; }
   }
   .online-tools .btn { min-height: 40px; }
 
-  /* One resume path: the banner. The in-section button is for starting. */
-  body:has(#shop-resume:not([hidden])) #btn-shop-instore { display: none; }
+  .cart-section .section-header { align-items: stretch; }
+  .trip-actions { width: 100%; }
+  #btn-start-cart, #btn-stop-cart { flex: 1; min-height: 48px; font-size: 16px; }
+
+  .generate-hint {
+    margin: 0 0 8px;
+    color: #6e6e73;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  #btn-shop-instore:disabled { opacity: 0.45; }
+
+  @media (orientation: landscape) {
+    .cart-section .section-header { flex-direction: row; align-items: center; }
+    .trip-actions { width: auto; }
+  }
 
   .checkout-section {
     background: transparent;
