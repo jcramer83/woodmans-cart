@@ -1,5 +1,5 @@
 // Network-first app shell. API calls are never cached, so a trip's checks stay live.
-const CACHE = "woodmans-cart-shop-v8";
+const CACHE = "woodmans-cart-shop-v9";
 const SHELL = [
   "/",
   "/index.html",
@@ -7,6 +7,7 @@ const SHELL = [
   "/shopping.css",
   "/app.js",
   "/shopping.js",
+  "/cart-sent.js",
   "/api-adapter.js",
   "/manifest.webmanifest",
   "/assets/icon-new.png",

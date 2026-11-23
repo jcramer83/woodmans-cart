@@ -608,10 +608,12 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
         const v4Id = ci.v4_item_id || "";
         const detail = cartDetailMap[v4Id] || {};
         return {
+          itemId: v4Id,
           name: detail.name || v4Id || "Unknown",
           price: detail.price || "",
           size: detail.size || "",
           image: detail.image || "",
+          location: detail.location || "",
           quantity: ci.quantity || 1,
         };
       });
