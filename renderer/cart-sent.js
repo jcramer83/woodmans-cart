@@ -1,6 +1,12 @@
 // Decide whether Generate list should stay available.
 // A cart payload with items but no aisle strings must not turn it off:
 // the send-complete cart update omits locations, and Refresh is what used to add them.
+function withoutCartItem(items, itemId) {
+  return (Array.isArray(items) ? items : []).filter(function (item) {
+    return item && item.itemId !== itemId;
+  });
+}
+
 function nextCartSent(wasSent, items) {
   if (!Array.isArray(items)) return !!wasSent;
   if (items.length === 0) return false;
@@ -9,5 +15,5 @@ function nextCartSent(wasSent, items) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { nextCartSent: nextCartSent };
+  module.exports = { nextCartSent: nextCartSent, withoutCartItem: withoutCartItem };
 }
