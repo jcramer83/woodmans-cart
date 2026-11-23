@@ -193,6 +193,14 @@ function bindEvents() {
   // Online cart viewer
   document.getElementById("btn-import-cart").addEventListener("click", fetchOnlineCart);
   document.getElementById("btn-remove-all-online").addEventListener("click", removeAllOnlineCartItems);
+  const onlineList = document.getElementById("online-cart-list");
+  if (onlineList) {
+    onlineList.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-remove-online");
+      if (!btn) return;
+      removeOnlineCartItem(btn.getAttribute("data-item-id"));
+    });
+  }
   document.getElementById("btn-copy-cart").addEventListener("click", openCopyCartModal);
   document.getElementById("btn-copy-cart-confirm").addEventListener("click", executeCopyCart);
 
@@ -976,24 +984,32 @@ function renderOnlineCart(result) {
         <div class="item-detail">${item.size ? esc(item.size) : ""}${item.price ? " - " + esc(item.price) : ""}</div>
       </div>
       <span class="item-qty">x${item.quantity || 1}</span>
-      ${item.itemId ? `<button class="btn-icon btn-remove-online" onclick="removeOnlineCartItem('${esc(item.itemId)}')" title="Remove from cart">&times;</button>` : ""}
+      ${item.itemId ? `<button type="button" class="btn-icon btn-remove-online" data-item-id="${esc(item.itemId)}" title="Remove from cart" aria-label="Remove from cart">&times;</button>` : ""}
     </div>`
     )
     .join("");
 }
 
 async function removeOnlineCartItem(itemId) {
+  if (!itemId) return;
   const mode = settings.shoppingMode || "instore";
+  const buttons = [];
+  document.querySelectorAll(".btn-remove-online").forEach((btn) => {
+    if (btn.getAttribute("data-item-id") === itemId) buttons.push(btn);
+  });
+  buttons.forEach((btn) => { btn.disabled = true; });
   try {
     const result = await appApi.removeOnlineCartItem(itemId, mode);
-    if (result.error) {
-      showToast("Failed to remove: " + result.error, "error");
-    } else {
-      showToast("Item removed", "success");
-      importOnlineCart();
+    if (!result || result.error) {
+      showToast((result && result.error) || "Couldn't remove that item. Try again.", "error");
+      buttons.forEach((btn) => { btn.disabled = false; });
+      return;
     }
+    renderOnlineCart(withoutCartItem(onlineCartItems, itemId));
+    showToast("Removed from the Woodman's cart", "success");
   } catch (err) {
-    showToast("Failed to remove: " + err.message, "error");
+    showToast("Couldn't remove that item. Try again.", "error");
+    buttons.forEach((btn) => { btn.disabled = false; });
   }
 }
 
