@@ -225,8 +225,14 @@
       ? formatClock(Date.now() - new Date(shopTrip.startedAt).getTime())
       : "Ready";
     wrap.hidden = false;
+    var thumbs = shopTrip.items.slice(0, 3).map(function (item) {
+      var src = item.image || (window.bundledThumb && window.bundledThumb(item.name));
+      return src ? '<img src="' + esc(src) + '" alt="">' : "";
+    }).join("");
     banner.innerHTML = '<span class="shop-resume-copy"><span class="shop-resume-kicker">Shopping list</span><strong>' +
-      done + " of " + shopTrip.items.length + "</strong></span><span class=\"shop-resume-time\">" + esc(time) + "</span>";
+      done + " of " + shopTrip.items.length + "</strong></span><span class=\"shop-resume-side\">" +
+      (thumbs ? '<span class="shop-resume-thumbs">' + thumbs + "</span>" : "") +
+      '<span class="shop-resume-time">' + esc(time) + "</span></span>";
   }
 
   function hideShoppingList() {
@@ -278,8 +284,9 @@
 
   function renderRow(item, done) {
     var chip = chipText(item);
-    var photo = item.image
-      ? '<img class="shop-photo" src="' + esc(item.image) + '" alt="">'
+    var photoSrc = item.image || (window.bundledThumb && window.bundledThumb(item.name));
+    var photo = photoSrc
+      ? '<img class="shop-photo" src="' + esc(photoSrc) + '" alt="">'
       : "";
     var badge = (item.quantity || 1) > 1
       ? '<span class="shop-qty-badge">×' + esc(item.quantity) + "</span>"
@@ -444,7 +451,7 @@
         statCard("This week", current) +
         statCard("Last week", previous) +
       "</div>" + delta +
-      chartCard("Time per week", weeks, "seconds", "#0f6e56", function (week) {
+      chartCard("Time per week", weeks, "seconds", "#b71c1c", function (week) {
         return week.trips ? formatMinutes(week.seconds) : "—";
       }) +
       chartCard("Spend per week", weeks, "spend", "#1b7f4a", function (week) {

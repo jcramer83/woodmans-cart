@@ -2245,11 +2245,11 @@ body.dark .section-header h4 { color: #f5f5f7; }
 #cart-section .section-header h2 { font-size: 20px; }
 
 .badge {
-  background: #e7f3ee;
-  color: #0f6e56;
+  background: #fdecea;
+  color: #9d1c1c;
   font-weight: 700;
 }
-body.dark .badge { background: rgba(61, 190, 154, 0.16); color: #8fd4bf; }
+body.dark .badge { background: rgba(198, 40, 40, 0.2); color: #ffcdd2; }
 
 .btn {
   border-radius: 10px;
@@ -2266,13 +2266,13 @@ body.dark .btn { background: #3a3a3c; color: #f5f5f7; border-color: rgba(255, 25
 #btn-start-cart,
 #btn-shop-instore,
 #btn-manual-search-go {
-  background: #0f6e56;
-  border-color: #0f6e56;
+  background: #c62828;
+  border-color: #c62828;
   color: #fff;
 }
 .btn-accent:hover,
 #btn-start-cart:hover,
-#btn-shop-instore:hover { background: #0c5c48; border-color: #0c5c48; }
+#btn-shop-instore:hover { background: #b71c1c; border-color: #b71c1c; }
 #btn-start-cart,
 #btn-shop-instore {
   min-height: 50px;
@@ -2310,11 +2310,19 @@ body.dark .generate-hint { background: transparent; color: #a1a1a6; }
 
 .product-result-add {
   background: transparent;
-  color: #0f6e56;
-  border: 1px solid rgba(15, 110, 86, 0.35);
+  color: #b71c1c;
+  border: 1px solid rgba(183, 28, 28, 0.35);
 }
-.item-thumb-fallback { color: #0f6e56; background: #e7f3ee; }
-input:focus, select:focus { border-color: #0f6e56; outline: none; }
+.item-thumb-fallback { color: #9d1c1c; background: #fdecea; }
+input:focus, select:focus { border-color: #c62828; outline: none; }
+.section-mark {
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  vertical-align: -4px;
+}
+.empty-state { font-style: normal; color: #6e6e73; }
+.empty-state-img { width: 132px; height: 80px; opacity: 1; object-fit: contain; }
 
 .app-header {
   align-items: flex-end;
@@ -2382,8 +2390,14 @@ body.dark .mode-badge { background: rgba(255, 255, 255, 0.12); }
   .cart-section .section-header { flex-wrap: wrap; gap: 8px; }
   #btn-start-cart, #btn-shop-instore { min-height: 44px; }
   .shop-resume-wrap { margin-top: 6px; }
-  .shop-resume { min-height: 48px; padding-top: 6px; padding-bottom: 6px; }
+  button#shop-resume.shop-resume {
+    min-height: 56px;
+    padding: 8px 40px 8px 14px;
+  }
   .shop-resume strong { font-size: 17px; }
+  .shop-resume-thumbs img { width: 28px; height: 28px; }
+  #cart-list .empty-state-img { display: none; }
+  .empty-state { padding: 4px 8px; }
   .section { padding: 8px 12px; }
   .section-header { margin-bottom: 6px; }
   .empty-state { padding: 2px 8px 6px; }

@@ -13,9 +13,9 @@
   --shop-ink: #1c1c1e;
   --shop-muted: #6e6e73;
   --shop-line: rgba(28, 28, 30, 0.08);
-  --shop-chip: #e7f3ee;
-  --shop-chip-ink: #0f6e56;
-  --shop-accent: #0f6e56;
+  --shop-chip: #fdecea;
+  --shop-chip-ink: #9d1c1c;
+  --shop-accent: #c62828;
   --shop-accent-ink: #ffffff;
   --shop-bar: #e6e1da;
   --shop-shadow: 0 1px 2px rgba(60, 40, 20, 0.04), 0 10px 24px rgba(60, 40, 20, 0.06);
@@ -102,9 +102,9 @@ body.dark .shop-screen {
   --shop-ink: #f5f5f7;
   --shop-muted: #a1a1a6;
   --shop-line: rgba(255, 255, 255, 0.1);
-  --shop-chip: rgba(15, 110, 86, 0.22);
-  --shop-chip-ink: #8fd4bf;
-  --shop-accent: #3dbe9a;
+  --shop-chip: rgba(198, 40, 40, 0.22);
+  --shop-chip-ink: #ffcdd2;
+  --shop-accent: #ef5350;
   --shop-bar: #2c2c2e;
   --shop-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.35);
   --shop-good: #7dcea0;
@@ -888,8 +888,27 @@ body.dark .shop-check { border-color: #555; }
   font-weight: 600;
   letter-spacing: -0.01em;
   text-transform: none;
-  color: #0f6e56;
+  color: #b71c1c;
 }
+.shop-resume-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.shop-resume-thumbs { display: flex; }
+.shop-resume-thumbs img {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #f6f1ea;
+  border: 2px solid #fff;
+  margin-left: -8px;
+}
+.shop-resume-thumbs img:first-child { margin-left: 0; }
+body.dark .shop-resume-thumbs img { border-color: #2c2c2e; }
 .shop-resume-time {
   flex-shrink: 0;
   font-size: 15px;
@@ -917,19 +936,19 @@ body.dark .shop-resume {
   color: #f5f5f7;
   border-color: rgba(255, 255, 255, 0.08);
 }
-body.dark .shop-resume-kicker { color: #8fd4bf; }
+body.dark .shop-resume-kicker { color: #ffcdd2; }
 body.dark .shop-resume-time { color: #a1a1a6; }
 body.dark .shop-resume-close { background: rgba(255, 255, 255, 0.1); color: #f5f5f7; }
 
 .item-location {
-  color: #0f6e56;
+  color: #9d1c1c;
   font-size: 12px;
   font-weight: 750;
   font-weight: 700;
   margin-top: 2px;
 }
 
-body.dark .item-location { color: #8fd4bf; }
+body.dark .item-location { color: #ffcdd2; }
 
 .shop-screen :focus-visible {
   outline: 3px solid var(--shop-accent);
