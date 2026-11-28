@@ -22,77 +22,142 @@ const HASHES = {
 const SHOP_IDS = { instore: "755261", pickup: "755260" };
 const ZONE_ID = "1022";
 
-// --- GraphQL helpers ---
+// --- HTTP request wrapper ---
+// A dropped connection after the headers does not emit 'end'. These helpers
+// used to wait forever in that case. Every request now fails closed.
 
-function gqlGet(cookieString, operationName, variables, sha256Hash) {
+const REQUEST_TIMEOUT_MS = 20000;
+const ATTEMPT_TIMEOUT_MS = 20000;
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+function redact(text) {
+  return String(text == null ? "" : text)
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/(password|token|cookie|authorization|secret|set-cookie)(["'\s:=]+)[^\s"',}&]+/gi, "$1$2[redacted]")
+    .slice(0, 300);
+}
+
+function parseJsonBody(raw) {
+  try { return JSON.parse(raw); }
+  catch { return raw; }
+}
+
+function request(options) {
+  const timeoutMs = options.timeoutMs || REQUEST_TIMEOUT_MS;
+  const target = options.url ? new URL(options.url) : null;
+  const protocol = target ? target.protocol : (options.protocol || "https:");
+  const mod = protocol === "http:" ? http : https;
+  const headers = Object.assign({}, options.headers || {});
+  const body = options.body;
+  if (body != null && headers["Content-Length"] == null && headers["content-length"] == null) {
+    headers["Content-Length"] = Buffer.byteLength(body);
+  }
+  const reqOptions = {
+    hostname: target ? target.hostname : options.hostname,
+    port: target ? (target.port || (protocol === "http:" ? 80 : 443)) : options.port,
+    path: target ? (target.pathname + target.search) : options.path,
+    method: options.method || "GET",
+    headers: headers,
+  };
+
   return new Promise((resolve, reject) => {
-    const params = new URLSearchParams({
-      operationName,
-      variables: JSON.stringify(variables),
-      extensions: JSON.stringify({ persistedQuery: { version: 1, sha256Hash } }),
-    });
-    const req = https.request({
-      hostname: "shopwoodmans.com",
-      path: `/graphql?${params.toString()}`,
-      method: "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json",
-        Cookie: cookieString,
-        Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
-      },
-    }, (res) => {
-      let data = "";
-      res.on("data", (c) => (data += c));
+    let settled = false;
+    let timer = null;
+    function settle(err, value) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(value);
+    }
+
+    const req = mod.request(reqOptions, (res) => {
+      if (typeof options.onHeaders === "function") options.onHeaders(res);
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      res.on("aborted", () => {
+        req.destroy();
+        settle(new Error("Response aborted"));
+      });
+      res.on("error", (err) => {
+        req.destroy();
+        settle(err instanceof Error ? err : new Error(redact(err)));
+      });
       res.on("end", () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
+        const raw = Buffer.concat(chunks).toString("utf8");
+        settle(null, { status: res.statusCode, headers: res.headers, body: raw });
       });
     });
-    req.on("error", reject);
-    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
+
+    req.on("error", (err) => {
+      settle(err instanceof Error ? err : new Error("Request failed"));
+    });
+
+    timer = setTimeout(() => {
+      const err = new Error("Request timed out");
+      req.destroy();
+      settle(err);
+    }, timeoutMs);
+
+    if (body != null) req.write(body);
     req.end();
   });
+}
+
+function gqlGet(cookieString, operationName, variables, sha256Hash) {
+  const params = new URLSearchParams({
+    operationName,
+    variables: JSON.stringify(variables),
+    extensions: JSON.stringify({ persistedQuery: { version: 1, sha256Hash } }),
+  });
+  return request({
+    url: "https://shopwoodmans.com/graphql?" + params.toString(),
+    method: "GET",
+    headers: {
+      "User-Agent": UA,
+      Accept: "application/json",
+      Cookie: cookieString,
+      Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
+    },
+  }).then((res) => ({ status: res.status, body: parseJsonBody(res.body) }));
 }
 
 function gqlPost(cookieString, body) {
-  return new Promise((resolve, reject) => {
-    const bodyStr = JSON.stringify(body);
-    const req = https.request({
-      hostname: "shopwoodmans.com",
-      path: "/graphql",
-      method: "POST",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(bodyStr),
-        Cookie: cookieString,
-        Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
-        Origin: "https://shopwoodmans.com",
-      },
-    }, (res) => {
-      let data = "";
-      res.on("data", (c) => (data += c));
-      res.on("end", () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
-      });
-    });
-    req.on("error", reject);
-    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
-    req.write(bodyStr);
-    req.end();
-  });
+  const bodyStr = JSON.stringify(body);
+  return request({
+    url: "https://shopwoodmans.com/graphql",
+    method: "POST",
+    headers: {
+      "User-Agent": UA,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Cookie: cookieString,
+      Referer: "https://shopwoodmans.com/store/woodmans-food-markets/storefront",
+      Origin: "https://shopwoodmans.com",
+    },
+    body: bodyStr,
+  }).then((res) => ({ status: res.status, body: parseJsonBody(res.body) }));
 }
 
-// Retry wrapper: retries once with 500ms delay on network errors
-async function withRetry(fn) {
+// Retry wrapper: one retry, and each attempt dies if it runs too long.
+async function withRetry(fn, timeoutMs) {
+  const limit = timeoutMs || ATTEMPT_TIMEOUT_MS;
+  async function once() {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Request timed out")), limit);
+    });
+    try {
+      return await Promise.race([Promise.resolve().then(fn), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   try {
-    return await fn();
+    return await once();
   } catch (err) {
     await sleep(500);
-    return await fn();
+    return await once();
   }
 }
 
@@ -129,36 +194,16 @@ function getJarCookieString(hostname) {
 }
 
 function httpRequest(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const mod = parsed.protocol === "https:" ? https : http;
-    const reqOptions = {
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      method: options.method || "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        ...(options.headers || {}),
-      },
-    };
-    const jarCookies = getJarCookieString(parsed.hostname);
-    if (jarCookies) {
-      reqOptions.headers["Cookie"] = jarCookies;
-    }
-    const req = mod.request(reqOptions, (res) => {
-      parseCookiesFromHeaders(res.headers, url);
-      let data = "";
-      res.setEncoding("utf-8");
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        resolve({ status: res.statusCode, headers: res.headers, body: data });
-      });
-    });
-    req.on("error", reject);
-    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
-    if (options.body) req.write(options.body);
-    req.end();
+  const parsed = new URL(url);
+  const headers = Object.assign({ "User-Agent": UA }, options.headers || {});
+  const jarCookies = getJarCookieString(parsed.hostname);
+  if (jarCookies && !headers.Cookie && !headers.cookie) headers.Cookie = jarCookies;
+  return request({
+    url: url,
+    method: options.method || "GET",
+    headers: headers,
+    body: options.body,
+    onHeaders: (res) => parseCookiesFromHeaders(res.headers, url),
   });
 }
 
@@ -570,11 +615,11 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
         throw new Error("Session expired");
       }
 
-      if (addRes.body?.errors) {
-        const errMsg = addRes.body.errors[0]?.message || "add failed";
+      if ((addRes.status && addRes.status >= 400) || addRes.body?.errors) {
+        const errMsg = (addRes.body && addRes.body.errors && addRes.body.errors[0] && addRes.body.errors[0].message) || "add failed";
         results.push({ item: item.item, status: "fail", reason: errMsg });
         itemDone({ id: item.id, index: sr.index, total: items.length, status: "fail" });
-        progress(`Failed: ${displayName} (${errMsg})`);
+        progress("Failed: " + displayName + " (HTTP " + (addRes.status || "?") + ": " + redact(errMsg) + ")");
       } else {
         lastAddResponse = addRes;
         results.push({ item: item.item, status: "ok" });
@@ -584,7 +629,7 @@ async function searchAndAddAll(session, items, progressCallback, itemDoneCallbac
     } catch (err) {
       results.push({ item: item.item, status: "fail", reason: err.message });
       itemDone({ id: item.id, index: sr.index, total: items.length, status: "fail" });
-      progress(`Failed: ${displayName} (${err.message})`);
+      progress("Failed: " + displayName + " (HTTP error: " + redact(err && err.message) + ")");
     }
   }
 
@@ -710,27 +755,18 @@ const V3_HEADERS_BASE = {
 };
 
 function v3Request(cookieString, method, path, body) {
-  return new Promise((resolve, reject) => {
-    const headers = { ...V3_HEADERS_BASE, Cookie: cookieString };
-    let bodyStr;
-    if (body) {
-      bodyStr = JSON.stringify(body);
-      headers["Content-Type"] = "application/json";
-      headers["Content-Length"] = Buffer.byteLength(bodyStr);
-    }
-    const req = https.request({ hostname: "shopwoodmans.com", path, method, headers }, (res) => {
-      let data = "";
-      res.on("data", (c) => (data += c));
-      res.on("end", () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
-      });
-    });
-    req.on("error", reject);
-    req.setTimeout(15000, () => req.destroy(new Error("Timeout")));
-    if (bodyStr) req.write(bodyStr);
-    req.end();
-  });
+  const headers = Object.assign({}, V3_HEADERS_BASE, { Cookie: cookieString });
+  let bodyStr;
+  if (body) {
+    bodyStr = JSON.stringify(body);
+    headers["Content-Type"] = "application/json";
+  }
+  return request({
+    url: "https://shopwoodmans.com" + path,
+    method: method,
+    headers: headers,
+    body: bodyStr,
+  }).then((res) => ({ status: res.status, body: parseJsonBody(res.body) }));
 }
 
 function v3Get(cookieString, path) { return v3Request(cookieString, "GET", path); }
@@ -1165,4 +1201,6 @@ module.exports = {
   selectDeliveryOption,
   placeOrder,
   sleep,
+  request,
+  redact,
 };

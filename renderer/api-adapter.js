@@ -54,15 +54,27 @@
   }
 
   async function apiPost(path, body) {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = setTimeout(function () {
+      if (controller) controller.abort();
+    }, 4 * 60 * 1000);
     try {
       const res = await fetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body == null ? {} : body),
+        signal: controller ? controller.signal : undefined,
       });
       return res.json();
     } catch (e) {
+      if (e && e.name === "AbortError") {
+        const err = new Error("Send timed out — check your cart");
+        err.timedOut = true;
+        throw err;
+      }
       throw new Error("Connection lost — check that the server is running");
+    } finally {
+      clearTimeout(timer);
     }
   }
 
