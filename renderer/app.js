@@ -1525,12 +1525,15 @@ async function startCartAutomation() {
   });
 
   let started = null;
+  let refreshAfterSend = false;
   try {
     try {
       started = await appApi.startCart({ items: cartItems, settings });
     } catch (err) {
-      appendLog(`Error: ${err.message}`);
+      refreshAfterSend = true;
+      appendLog("Error: " + (err && err.message ? err.message : "Send failed"));
     }
+    if (started && /timed out/i.test(started.error || "")) refreshAfterSend = true;
 
     removeItemDoneListener();
     progressBar.style.display = "none";
@@ -1551,7 +1554,13 @@ async function startCartAutomation() {
       started && typeof started.skipped === "number" ? started.skipped : 0
     );
     const summaryLine = document.getElementById("cart-status-line");
-    if (summaryLine) {
+    if (refreshAfterSend) {
+      showToast("Send timed out — check your cart", "error");
+      if (summaryLine) {
+        summaryLine.textContent = "Send timed out — check your cart";
+        summaryLine.className = "cart-status-line error";
+      }
+    } else if (summaryLine) {
       if (failCount > 0) {
         summaryLine.textContent = "Done — " + okCount + " added, " + failCount + " failed, " + skipCount + " skipped";
         summaryLine.className = "cart-status-line error";
@@ -1574,6 +1583,7 @@ async function startCartAutomation() {
     document.getElementById("btn-stop-cart").style.display = "none";
     updateMobileCartBar();
     renderCart();
+    if (refreshAfterSend) fetchOnlineCart();
   }
 }
 

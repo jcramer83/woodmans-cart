@@ -7,6 +7,38 @@ const path = require("path");
 const fs = require("fs");
 
 const PORT = Number(process.env.PORT) || 3456;
+const SEND_DEADLINE_MS = 3 * 60 * 1000;
+const PROGRESS_LOG_LIMIT = 500;
+const progressLog = [];
+
+function redactLog(text) {
+  return String(text == null ? "" : text)
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/(password|token|cookie|authorization|secret|set-cookie)(["'\s:=]+)[^\s"',}&]+/gi, "$1$2[redacted]")
+    .slice(0, 300);
+}
+
+function pushProgressLog(line) {
+  progressLog.push(line);
+  if (progressLog.length > PROGRESS_LOG_LIMIT) progressLog.shift();
+}
+
+if (!global.__woodmansProcessLogs) {
+  global.__woodmansProcessLogs = true;
+  process.on("unhandledRejection", function (reason) {
+    const text = reason && reason.stack ? reason.stack : reason;
+    const line = new Date().toISOString() + " unhandledRejection " + redactLog(text);
+    console.error(line);
+    pushProgressLog(line);
+  });
+  process.on("uncaughtException", function (err) {
+    const text = err && err.stack ? err.stack : err;
+    const line = new Date().toISOString() + " uncaughtException " + redactLog(text);
+    console.error(line);
+    pushProgressLog(line);
+    process.exit(1);
+  });
+}
 
 function startServer(deps) {
   const { readJSON, writeJSON, SETTINGS_PATH, STAPLES_PATH, MANUAL_ITEMS_PATH } = deps;
@@ -40,7 +72,11 @@ function startServer(deps) {
   }
 
   function sendProgress(message) {
-    broadcast({ type: "progress", message: message });
+    const safe = redactLog(message);
+    const line = new Date().toISOString() + " " + safe;
+    console.log(line);
+    pushProgressLog(line);
+    broadcast({ type: "progress", message: safe });
   }
 
   function sendItemDone(data) {
@@ -65,6 +101,10 @@ function startServer(deps) {
       return null;
     }
   }
+
+  app.get("/api/progress-log", function (req, res) {
+    res.json({ lines: progressLog.slice() });
+  });
 
   // --- REST API endpoints ---
 
@@ -262,24 +302,46 @@ function startServer(deps) {
     const shoppingMode = mergedSettings.shoppingMode || "instore";
 
     var fastWorker = require("./cart-worker-fast");
+    var partial = [];
+    var deadlineTimer = null;
+    function summarize(list) {
+      var ok = 0, failed = 0, skipped = 0;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].status === "ok") ok++;
+        else if (list[i].status === "skip") skipped++;
+        else if (list[i].status === "fail") failed++;
+      }
+      return { ok: ok, failed: failed, skipped: skipped };
+    }
     try {
       var session = await fastWorker.getFastSession(mergedSettings, sendProgress);
       cartWorkerInstance = { active: true };
       await fastWorker.ensureShoppingMode(session, shoppingMode, sendProgress);
 
-      var fastResult = await fastWorker.searchAndAddAll(
+      var work = fastWorker.searchAndAddAll(
         session, items, sendProgress,
-        function (itemDoneData) { sendItemDone(itemDoneData); },
+        function (itemDoneData) {
+          partial.push(itemDoneData);
+          sendItemDone(itemDoneData);
+        },
         function () { return !cartWorkerInstance; }
       );
+      var fastResult = await Promise.race([
+        work,
+        new Promise(function (_, reject) {
+          deadlineTimer = setTimeout(function () {
+            var err = new Error("Send timed out");
+            err.code = "SEND_TIMEOUT";
+            reject(err);
+          }, SEND_DEADLINE_MS);
+        }),
+      ]);
 
-      var ok = fastResult.results.filter(function (r) { return r.status === "ok"; }).length;
-      var failed = fastResult.results.filter(function (r) { return r.status === "fail"; }).length;
-      var skipped = fastResult.results.filter(function (r) { return r.status === "skip"; }).length;
-      sendProgress("Done! Added: " + ok + ", Failed: " + failed + ", Skipped: " + skipped);
+      var counts = summarize(fastResult.results || []);
+      sendProgress("Done! Added: " + counts.ok + ", Failed: " + counts.failed + ", Skipped: " + counts.skipped);
 
       // Refresh the online cart after adding items — use cart items from the add response first
-      if (ok > 0) {
+      if (counts.ok > 0) {
         if (fastResult.cartItems && fastResult.cartItems.length > 0) {
           sendOnlineUpdate(fastResult.cartItems);
           sendProgress("Online cart updated (" + fastResult.cartItems.length + " items).");
@@ -297,12 +359,25 @@ function startServer(deps) {
         }
       }
 
-      cartWorkerInstance = null;
-      return res.json({ ok: ok, failed: failed, skipped: skipped, results: fastResult.results });
+      return res.json({ ok: counts.ok, failed: counts.failed, skipped: counts.skipped, results: fastResult.results });
     } catch (err) {
-      sendProgress("Error: " + err.message);
+      if (err && err.code === "SEND_TIMEOUT") {
+        cartWorkerInstance = null;
+        sendProgress("Send timed out");
+        var timed = summarize(partial);
+        return res.json({
+          ok: timed.ok,
+          failed: timed.failed,
+          skipped: timed.skipped,
+          results: partial,
+          error: "Send timed out",
+        });
+      }
+      sendProgress("Error: " + (err && err.message ? err.message : "Send failed"));
+      return res.json({ ok: 0, failed: 0, skipped: 0, error: err && err.message ? err.message : "Send failed" });
+    } finally {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
       cartWorkerInstance = null;
-      return res.json({ ok: 0, failed: 0, skipped: 0, error: err.message });
     }
   });
 
